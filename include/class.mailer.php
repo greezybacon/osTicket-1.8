@@ -198,8 +198,14 @@ class Mailer {
         $body = $mime->get($encodings);
         //encode the headers.
         $headers = $mime->headers($headers, true);
+
+        // Cache smtp connections made during this request
+        static $smtp_connections = array();
         if(($smtp=$this->getSMTPInfo())) { //Send via SMTP
-            $mail = mail::factory('smtp',
+            $key = sprintf("%s:%s:%s", $smtp['host'], $smtp['port'],
+                $smtp['username']);
+            if (!isset($smtp_connections[$key])) {
+                $smtp_connections[$key] = $mail = mail::factory('smtp',
                     array ('host' => $smtp['host'],
                            'port' => $smtp['port'],
                            'auth' => $smtp['auth'],
@@ -207,7 +213,13 @@ class Mailer {
                            'password' => $smtp['password'],
                            'timeout'  => 20,
                            'debug' => false,
-                           ));
+                           'persist' => true,
+               ));
+            }
+            else {
+                // Use persistent connection
+                $mail = $smtp_connections[$key];
+            }
 
             $result = $mail->send($to, $headers, $body);
             if(!PEAR::isError($result))
