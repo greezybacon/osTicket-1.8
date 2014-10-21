@@ -52,10 +52,10 @@ var autoLock = {
 
         if(!autoLock.lasteventTime) { //I hate nav away warnings..but
             $(document).on('pjax:beforeSend.changed', function(e) {
-                return confirm("Any changes or info you've entered will be discarded!");
+                return confirm(__("Any changes or info you've entered will be discarded!"));
             });
             $(window).bind('beforeunload', function(e) {
-                return "Any changes or info you've entered will be discarded!";
+                return __("Any changes or info you've entered will be discarded!");
              });
         }
 
@@ -135,8 +135,7 @@ var autoLock = {
             $(window).unbind('beforeunload');
             //Only warn if we had a failed lock attempt.
             if(autoLock.warn && !autoLock.lockId && autoLock.lasteventTime) {
-                var answer=confirm('Unable to acquire a lock on the ticket. Someone else could be working on the same ticket. \
-                    Please confirm if you wish to continue anyways.');
+                var answer=confirm(__('Unable to acquire a lock on the ticket. Someone else could be working on the same ticket.  Please confirm if you wish to continue anyways.'));
                 if(!answer) {
                     e.returnValue=false;
                     e.cancelBubble=true;
@@ -236,7 +235,7 @@ var autoLock = {
                     autoLock.lockAttempts++;
                     if(warn && (!lock.retry || autoLock.lockAttempts>=autoLock.maxattempts)) {
                         autoLock.retry=false;
-                        alert('Unable to lock the ticket. Someone else could be working on the same ticket.');
+                        alert(__('Unable to lock the ticket. Someone else could be working on the same ticket.'));
                     }
                 }
                 break;
@@ -244,7 +243,7 @@ var autoLock = {
     },
 
     discardWarning: function(e) {
-        e.returnValue="Any changes or info you've entered will be discarded!";
+        e.returnValue=__("Any changes or info you've entered will be discarded!");
     },
 
     //TODO: Monitor events and elapsed time and warn user when the lock is about to expire.
@@ -307,7 +306,7 @@ $.showImagesInline = function(urls, thread_id) {
                     }
                 ).append($('<div class="caption">')
                     .append('<span class="filename">'+info.filename+'</span>')
-                    .append('<a href="'+info.download_url+'" class="action-button no-pjax"><i class="icon-download-alt"></i> Download</a>')
+                    .append('<a href="'+info.download_url+'" class="action-button pull-right no-pjax"><i class="icon-download-alt"></i> '+__('Download')+'</a>')
                 );
             e.data('wrapped', true);
         }
@@ -320,22 +319,8 @@ $.refreshTicketView = function() {
 }
 
 var ticket_onload = function($) {
-    $('#response_options form').hide();
-    $('#ticket_notes').hide();
-    if(location.hash != "" && $('#response_options '+location.hash).length) {
-        $('#response_options '+location.hash+'_tab').addClass('active');
-        $('#response_options '+location.hash).show();
-    } else if(location.hash == "#notes" && $('#ticket_notes').length) {
-        $('#response_options #note_tab').addClass('active');
-        $('#response_options form').hide();
-        $('#response_options #note').show();
-        $('#ticket_thread').hide();
-        $('#ticket_notes').show();
-        $('#toggle_ticket_thread').removeClass('active');
-        $('#toggle_notes').addClass('active');
-    } else {
-        $('#response_options ul.tabs li:first a').addClass('active');
-        $('#response_options '+$('#response_options ul.tabs li:first a').attr('href')).show();
+    if (!location.hash || !$('#response_options .tab_content' + location.hash).length) {
+        $('#response_options ul.tabs li:first a').trigger('click');
     }
 
     $('#reply_tab').click(function() {
@@ -349,12 +334,6 @@ var ticket_onload = function($) {
      });
 
     $('#response_options ul.tabs li a').click(function(e) {
-        e.preventDefault();
-        $('#response_options ul.tabs li a').removeClass('active');
-        $(this).addClass('active');
-        $('#response_options form').hide();
-        //window.location.hash = this.hash;
-        $('#response_options '+$(this).attr('href')).show();
         $("#msg_error, #msg_notice, #msg_warning").fadeOut();
      });
 
@@ -382,7 +361,7 @@ var ticket_onload = function($) {
     autoLock.Init();
 
     /*** Ticket Actions **/
-    //print options
+    //print options TODO: move to backend
     $('a#ticket-print').click(function(e) {
         e.preventDefault();
         $('#overlay').show();
@@ -390,11 +369,18 @@ var ticket_onload = function($) {
         return false;
     });
 
-    //ticket status (close & reopen) xxx: move to backend ticket-action
-    $('a#ticket-close, a#ticket-reopen').click(function(e) {
+
+    $(document).off('.ticket-action');
+    $(document).on('click.ticket-action', 'a.ticket-action', function(e) {
         e.preventDefault();
-        $('#overlay').show();
-        $('.dialog#ticket-status').show();
+        var url = 'ajax.php/'
+        +$(this).attr('href').substr(1)
+        +'?_uid='+new Date().getTime();
+        var $redirect = $(this).data('href');
+        $.dialog(url, [201], function (xhr) {
+            window.location.href = $redirect ? $redirect : window.location.href;
+        });
+
         return false;
     });
 
@@ -413,9 +399,9 @@ var ticket_onload = function($) {
         if (!extra) return;
         if (!imgs.length) return;
         extra.append($('<a>')
-          .addClass("action-button show-images")
+          .addClass("action-button pull-right show-images")
           .css({'font-weight':'normal'})
-          .text(' Show Images')
+          .text(' ' + __('Show Images'))
           .click(function(ev) {
             imgs.each(function(i, img) {
               $.showNonLocalImage(img);

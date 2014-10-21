@@ -30,7 +30,7 @@ class Team {
 
         if(!$id && !($id=$this->getId()))
             return false;
-        
+
         $sql='SELECT team.*,count(member.staff_id) as members '
             .' FROM '.TEAM_TABLE.' team '
             .' LEFT JOIN '.TEAM_MEMBER_TABLE.' member USING(team_id) '
@@ -130,10 +130,24 @@ class Team {
         return !$this->ht['noalerts'];
     }
 
+    function getTranslateTag($subtag) {
+        return _H(sprintf('team.%s.%s', $subtag, $this->id));
+    }
+    function getLocal($subtag) {
+        $tag = $this->getTranslateTag($subtag);
+        $T = CustomDataTranslation::translate($tag);
+        return $T != $tag ? $T : $this->ht[$subtag];
+    }
+    static function getLocalById($id, $subtag, $default) {
+        $tag = _H(sprintf('team.%s.%s', $subtag, $id));
+        $T = CustomDataTranslation::translate($tag);
+        return $T != $tag ? $T : $default;
+    }
+
     function update($vars, &$errors) {
 
         //reset team lead if they're being deleted
-        if($this->getLeadId()==$vars['lead_id'] 
+        if($this->getLeadId()==$vars['lead_id']
                 && $vars['remove'] && in_array($this->getLeadId(), $vars['remove']))
             $vars['lead_id']=0;
 
@@ -197,9 +211,9 @@ class Team {
     }
 
     function getTeams( $availableOnly=false ) {
-        
+
         $teams=array();
-        $sql='SELECT team_id, name FROM '.TEAM_TABLE;
+        $sql='SELECT team_id, name, isenabled FROM '.TEAM_TABLE;
         if($availableOnly) {
             //Make sure the members are active...TODO: include group check!!
             $sql='SELECT t.team_id, t.name, count(m.staff_id) as members '
@@ -212,9 +226,12 @@ class Team {
                 .' HAVING members>0'
                 .' ORDER by t.name ';
         }
-        if(($res=db_query($sql)) && db_num_rows($res)) {
-            while(list($id, $name)=db_fetch_row($res))
-                $teams[$id] = $name;
+        if(($res = db_query($sql)) && db_num_rows($res)) {
+            while(list($id, $name, $isenabled) = db_fetch_row($res)) {
+                $teams[$id] = self::getLocalById($id, 'name', $name);
+                if (!$isenabled)
+                    $teams[$id] .= ' ' . __('(disabled)');
+            }
         }
 
         return $teams;
@@ -224,23 +241,22 @@ class Team {
         return self::getTeams(true);
     }
 
-    function create($vars, &$errors) { 
+    function create($vars, &$errors) {
         return self::save(0, $vars, $errors);
     }
 
     function save($id, $vars, &$errors) {
-
         if($id && $vars['id']!=$id)
-            $errors['err']='Missing or invalid team';
-            
+            $errors['err']=__('Missing or invalid team');
+
         if(!$vars['name']) {
-            $errors['name']='Team name required';
+            $errors['name']=__('Team name is required');
         } elseif(strlen($vars['name'])<3) {
-            $errors['name']='Team name must be at least 3 chars.';
+            $errors['name']=__('Team name must be at least 3 chars.');
         } elseif(($tid=Team::getIdByName($vars['name'])) && $tid!=$id) {
-            $errors['name']='Team name already exists';
+            $errors['name']=__('Team name already exists');
         }
-        
+
         if($errors) return false;
 
         $sql='SET updated=NOW(),isenabled='.db_input($vars['isenabled']).
@@ -252,16 +268,18 @@ class Team {
             $sql='UPDATE '.TEAM_TABLE.' '.$sql.',lead_id='.db_input($vars['lead_id']).' WHERE team_id='.db_input($id);
             if(db_query($sql) && db_affected_rows())
                 return true;
-                    
-            $errors['err']='Unable to update the team. Internal error';
+
+            $errors['err']=sprintf(__('Unable to update %s.'), __('this team'))
+               .' '.__('Internal error occurred');
         } else {
             $sql='INSERT INTO '.TEAM_TABLE.' '.$sql.',created=NOW()';
             if(db_query($sql) && ($id=db_insert_id()))
                 return $id;
-                
-            $errors['err']='Unable to create the team. Internal error';
+
+            $errors['err']=sprintf(__('Unable to create %s.'), __('this team'))
+               .' '.__('Internal error occurred');
         }
-        
+
         return false;
     }
 }

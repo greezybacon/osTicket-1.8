@@ -37,16 +37,26 @@ if (isset($options['entry']) && $options['mode'] == 'edit') { ?>
     <?php
     }
     foreach ($form->getFields() as $field) {
+        try {
+            if (!$field->isVisibleToStaff())
+                continue;
+        }
+        catch (Exception $e) {
+            // Not connected to a DynamicFormField
+        }
         ?>
         <tr><?php if ($field->isBlockLevel()) { ?>
                 <td colspan="2">
+                <div style="margin-bottom:0.5em;margin-top:0.5em"><strong><?php
+                echo Format::htmlchars($field->getLocal('label'));
+                ?></strong>:</div>
                 <?php
             }
             else { ?>
                 <td class="multi-line <?php if ($field->get('required')) echo 'required';
                 ?>" style="min-width:120px;" <?php if ($options['width'])
                     echo "width=\"{$options['width']}\""; ?>>
-                <?php echo Format::htmlchars($field->get('label')); ?>:</td>
+                <?php echo Format::htmlchars($field->getLocal('label')); ?>:</td>
                 <td><div style="position:relative"><?php
             }
             $field->render(); ?>
@@ -55,9 +65,9 @@ if (isset($options['entry']) && $options['mode'] == 'edit') { ?>
             <?php
             }
             if (($a = $field->getAnswer()) && $a->isDeleted()) {
-                ?><a class="action-button danger overlay" title="Delete this data"
+                ?><a class="action-button float-right danger overlay" title="Delete this data"
                     href="#delete-answer"
-                    onclick="javascript:if (confirm('You sure?'))
+                    onclick="javascript:if (confirm('<?php echo __('You sure?'); ?>'))
                         $.ajax({
                             url: 'ajax.php/form/answer/'
                                 +$(this).data('entryId') + '/' + $(this).data('fieldId'),
@@ -72,7 +82,7 @@ if (isset($options['entry']) && $options['mode'] == 'edit') { ?>
             }
             if ($field->get('hint') && !$field->isBlockLevel()) { ?>
                 <br /><em style="color:gray;display:inline-block"><?php
-                    echo Format::htmlchars($field->get('hint')); ?></em>
+                    echo Format::htmlchars($field->getLocal('hint')); ?></em>
             <?php
             }
             foreach ($field->errors() as $e) { ?>

@@ -238,13 +238,13 @@ h2, .subject {
 .button,
 .button:visited {
   background: #222;
+  border: none;
   display: inline-block;
   font-size: 16px;
-  padding: 8px 16px 6px 16px;
-  width: 160px;
+  padding: 4px 16px 4px 16px;
+  max-width: 220px;
   text-align: center;
   color: #fff;
-  font-weight: bold;
   text-decoration: none;
   border-radius: 5px;
   -moz-border-radius: 5px;
@@ -303,14 +303,11 @@ body {
 #header #logo {
   width: 220px;
   height: 71px;
-  float: left;
 }
 #header p {
   width: 400px;
-  text-align: right;
   margin: 0;
-  padding: 10px 0;
-  float: right;
+  padding: 10px 0 0;
 }
 #nav {
   margin: 0 20px;
@@ -329,9 +326,8 @@ body {
   display: inline;
 }
 #nav li a {
-  display: block;
+  display: inline-block;
   width: auto;
-  float: left;
   height: 20px;
   line-height: 20px;
   text-align: center;
@@ -343,6 +339,14 @@ body {
   -moz-border-radius: 20px;
   background-position: 10px 50%;
   background-repeat: no-repeat;
+}
+.rtl #nav li a {
+  background-position: right center;
+  background-position: calc(100% - 10px) center;
+  padding-left: 10px;
+  padding-right: 32px;
+  margin-right: 10px;
+  margin-left: 0;
 }
 #nav li a.active,
 #nav li a:hover {
@@ -395,19 +399,26 @@ body {
   margin: 0 auto;
   background: url('../images/poweredby.png') top left no-repeat;
 }
+.front-page-button {
+}
+#landing_page .welcome {
+  width: 560px;
+}
 #landing_page #new_ticket {
   margin-top: 40px;
+  background: url('../images/new_ticket_icon.png') top left no-repeat;
+}
+#landing_page #new_ticket,
+#landing_page #check_status {
   width: 295px;
   padding-left: 75px;
-  float: left;
-  background: url('../images/new_ticket_icon.png') top left no-repeat;
 }
 #landing_page #check_status {
   margin-top: 40px;
-  width: 295px;
-  padding-left: 75px;
-  float: right;
   background: url('../images/check_status_icon.png') top left no-repeat;
+}
+#landing_page h1, #landing_page h2, #landing_page h3 {
+    margin-bottom: 10px;
 }
 /* Landing page FAQ not yet implemented. */
 #faq {
@@ -457,10 +468,7 @@ body {
   margin: 0;
   background: url(../images/kb_category_bg.png) bottom left repeat-x;
   border-bottom: 1px solid #ddd;
-}
-#kb > li h4 {
-  padding-bottom: 3px;
-  margin-bottom: 3px;
+  display: block;
 }
 #kb > li h4 span {
   color: #666;
@@ -468,13 +476,51 @@ body {
 #kb > li h4 a {
   font-size: 14px;
 }
-#kb li i {
+#kb > li > i {
   display: block;
   width: 32px;
   height: 32px;
   float: left;
   margin-right: 6px;
   background: url(../images/kb_large_folder.png) top left no-repeat;
+}
+.featured-category {
+    margin-top: 10px;
+    width: 49.7%;
+    display: inline-block;
+    box-sizing: border-box;
+    vertical-align: top;
+}
+.category-name {
+    display: inline-block;
+    font-weight: 400;
+    font-size: 120%;
+}
+.featured-category i {
+    color: rgba(0,174,239, 0.8);
+    text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+    display: inline-block;
+    vertical-align: middle;
+}
+.article-headline {
+    margin-left: 34px;
+}
+.rtl .article-headline {
+    margin-left: 0;
+    margin-right: 34px;
+}
+.article-teaser {
+    font-size: 90%;
+    line-height: 1.5em;
+    height: 3em;
+    overflow: hidden;
+}
+.article-title {
+    font-weight: 400;
+}
+.faq-content .article-title {
+    font-size: 16pt;
+    margin-top: 15px;
 }
 #kb-search {
   padding: 10px 0;
@@ -530,10 +576,8 @@ body {
 #ticketForm div label,
 #clientLogin div label {
   display: block;
-  width: 140px;
-  float: left;
 }
-label.required {
+label.required, span.required {
   font-weight: bold;
 }
 #ticketForm div label.required,
@@ -547,9 +591,7 @@ label.required {
   width: auto;
   border: 1px solid #aaa;
   background: #fff;
-  margin-right: 10px;
   display: block;
-  float: left;
 }
 #ticketForm div input[type=file],
 #clientLogin div input[type=file] {
@@ -635,6 +677,20 @@ label.required {
   box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
   background: url('../images/lock.png?1319655200') 95% 50% no-repeat #f6f6f6;
 }
+.rtl #clientLogin {
+    background-position: 5% 50%;
+}
+#clientLogin .instructions {
+    display:table-cell;
+    padding-left: 2em;
+    padding-right:90px;
+}
+.rtl #clientLogin .instructions {
+    padding-left: 0;
+    padding-right:0;
+    padding-right: 2em;
+    padding-left:90px;
+}
 #clientLogin p {
   clear: both;
 }
@@ -679,25 +735,6 @@ label.required {
 #reply #response_options textarea {
   border: 1px solid #aaa;
   background: #fff;
-}
-#reply .attachments .uploads div {
-  display: inline-block;
-  padding-right: 20px;
-}
-#reply .file {
-  display: inline-block;
-  padding-left: 20px;
-  margin-right: 20px;
-  background: url('../images/icons/file.gif') 0 50% no-repeat;
-}
-.uploads {
-  display: inline-block;
-  padding-right: 20px;
-}
-.uploads label {
-  padding: 3px;
-  padding-right: 10px;
-  width: auto !important;
 }
 /* Ticket icons */
 .Icon {
@@ -915,4 +952,76 @@ img.sign-in-image {
     max-width: 200px;
     width: auto;
     height: auto;
+}
+.login-box {
+    width:40%;
+    display:table-cell;
+    box-shadow: 12px 0 15px -15px rgba(0,0,0,0.4);
+    padding:15px;
+}
+.rtl .login-box {
+    box-shadow: -12px 0 15px -15px rgba(0,0,0,0.4);
+}
+.flush-right {
+    text-align: right;
+}
+.flush-left {
+    text-align: left;
+}
+.sidebar {
+    margin-bottom: 20px;
+    margin-left: 20px;
+}
+#landing_page .sidebar {
+    width: 220px;
+}
+.rtl .sidebar {
+    margin-left: 0;
+    margin-right: 20px;
+}
+.sidebar .content {
+    padding: 10px; border: 1px solid #C8DDFA; background: #F7FBFE;
+}
+
+.sidebar section .header {
+    font-weight: bold;
+}
+.sidebar section + section {
+    margin-top: 15px;
+}
+.search-form {
+    padding: 12px 0px 20px 0;
+}
+.searchbar .search,
+.search-form .search {
+    display: inline-block;
+    width: 400px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    padding: 5px 10px;
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.075);
+}
+
+.searchbar .search {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+}
+.bleed {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.row {
+}
+.span4 {
+    display: inline-block;
+    width: 30.5%;
+    margin: 0 1%;
+    vertical-align: top;
+}
+.span8 {
+    display: inline-block;
+    width: 64.5%;
+    margin: 0 1%;
+    vertical-align: top;
 }

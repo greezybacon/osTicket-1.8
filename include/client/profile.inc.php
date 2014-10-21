@@ -1,10 +1,7 @@
-<?php
-
-?>
-<h1>Manage Your Profile Information</h1>
-<p>
-Use the forms below to update the information we have on file for your
-account
+<h1><?php echo __('Manage Your Profile Information'); ?></h1>
+<p><?php echo __(
+'Use the forms below to update the information we have on file for your account'
+); ?>
 </p>
 <form action="profile.php" method="post">
   <?php csrf_token(); ?>
@@ -19,47 +16,55 @@ if ($acct = $thisclient->getAccount()) {
 ?>
 <tr>
     <td colspan="2">
-        <div><hr><h3>Preferences</h3>
+        <div><hr><h3><?php echo __('Preferences'); ?></h3>
         </div>
     </td>
 </tr>
-    <td>Time Zone:</td>
-    <td>
-        <select name="timezone_id" id="timezone_id">
-            <option value="0">&mdash; Select Time Zone &mdash;</option>
-            <?php
-            $sql='SELECT id, offset,timezone FROM '.TIMEZONE_TABLE.' ORDER BY id';
-            if(($res=db_query($sql)) && db_num_rows($res)){
-                while(list($id,$offset, $tz)=db_fetch_row($res)){
-                    $sel=($info['timezone_id']==$id)?'selected="selected"':'';
-                    echo sprintf('<option value="%d" %s>GMT %s - %s</option>',$id,$sel,$offset,$tz);
-                }
-            }
-            ?>
-        </select>
-        &nbsp;<span class="error"><?php echo $errors['timezone_id']; ?></span>
-    </td>
-</tr>
-<tr>
-    <td width="180">
-       Daylight Saving:
-    </td>
-    <td>
-        <input type="checkbox" name="dst" value="1" <?php echo $info['dst']?'checked="checked"':''; ?>>
-        Observe daylight saving
-        <em>(Current Time: <strong><?php echo Format::date($cfg->getDateTimeFormat(),Misc::gmtime(),$info['tz_offset'],$info['dst']); ?></strong>)</em>
-    </td>
-</tr>
+    <tr>
+        <td width="180">
+            <?php echo __('Time Zone');?>:
+        </td>
+        <td>
+            <select name="timezone" multiple="multiple" id="timezone-dropdown">
+                <option value=""><?php echo __('System Default'); ?></option>
+<?php foreach (DateTimeZone::listIdentifiers() as $zone) { ?>
+                <option value="<?php echo $zone; ?>" <?php
+                if ($info['timezone'] == $zone)
+                    echo 'selected="selected"';
+                ?>><?php echo $zone; ?></option>
+<?php } ?>
+            </select>
+            <div class="error"><?php echo $errors['timezone']; ?></div>
+        </td>
+    </tr>
+    <tr>
+        <td width="180">
+            <?php echo __('Preferred Language'); ?>:
+        </td>
+        <td>
+    <?php
+    $langs = Internationalization::getConfiguredSystemLanguages(); ?>
+            <select name="lang">
+                <option value="">&mdash; <?php echo __('Use Browser Preference'); ?> &mdash;</option>
+<?php foreach($langs as $l) {
+$selected = ($info['lang'] == $l['code']) ? 'selected="selected"' : ''; ?>
+                <option value="<?php echo $l['code']; ?>" <?php echo $selected;
+                    ?>><?php echo Internationalization::getLanguageDescription($l['code']); ?></option>
+<?php } ?>
+            </select>
+            <span class="error">&nbsp;<?php echo $errors['lang']; ?></span>
+        </td>
+    </tr>
 <?php if ($acct->isPasswdResetEnabled()) { ?>
 <tr>
     <td colspan=2">
-        <div><hr><h3>Access Credentials</h3></div>
+        <div><hr><h3><?php echo __('Access Credentials'); ?></h3></div>
     </td>
 </tr>
 <?php if (!isset($_SESSION['_client']['reset-token'])) { ?>
 <tr>
     <td width="180">
-        Current Password:
+        <?php echo __('Current Password'); ?>:
     </td>
     <td>
         <input type="password" size="18" name="cpasswd" value="<?php echo $info['cpasswd']; ?>">
@@ -69,7 +74,7 @@ if ($acct = $thisclient->getAccount()) {
 <?php } ?>
 <tr>
     <td width="180">
-        New Password:
+        <?php echo __('New Password'); ?>:
     </td>
     <td>
         <input type="password" size="18" name="passwd1" value="<?php echo $info['passwd1']; ?>">
@@ -78,7 +83,7 @@ if ($acct = $thisclient->getAccount()) {
 </tr>
 <tr>
     <td width="180">
-        Confirm New Password:
+        <?php echo __('Confirm New Password'); ?>:
     </td>
     <td>
         <input type="password" size="18" name="passwd2" value="<?php echo $info['passwd2']; ?>">
@@ -96,3 +101,17 @@ if ($acct = $thisclient->getAccount()) {
         window.location.href='index.php';"/>
 </p>
 </form>
+<link rel="stylesheet" href="<?php echo ROOT_PATH; ?>/css/jquery.multiselect.css"/>
+<link rel="stylesheet" href="<?php echo ROOT_PATH; ?>/css/jquery.multiselect.filter.css"/>
+<script type="text/javascript" src="<?php echo ROOT_PATH; ?>/js/jquery.multiselect.filter.min.js"></script>
+<script type="text/javascript">
+$('#timezone-dropdown').multiselect({
+    multiple: false,
+    header: <?php echo JsonDataEncoder::encode(__('Time Zones')); ?>,
+    noneSelectedText: <?php echo JsonDataEncoder::encode(__('System Default')); ?>,
+    selectedList: 1,
+    minWidth: 400
+}).multiselectfilter({
+    placeholder: <?php echo JsonDataEncoder::encode(__('Search')); ?>
+});
+</script>

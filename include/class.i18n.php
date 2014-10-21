@@ -26,11 +26,13 @@ class Internationalization {
     function Internationalization($language=false) {
         global $cfg;
 
-        if ($cfg && ($lang = $cfg->getSystemLanguage()))
+        if ($cfg && ($lang = $cfg->getPrimaryLanguage()))
             array_unshift($this->langs, $language);
 
-        if ($language)
-            array_unshift($this->langs, $language);
+        // Detect language filesystem path, case insensitively
+        if ($language && ($info = self::getLanguageInfo($language))) {
+            array_unshift($this->langs, $info['code']);
+        }
     }
 
     function getTemplate($path) {
@@ -50,16 +52,20 @@ class Internationalization {
             'department.yaml' =>    'Dept::create',
             'sla.yaml' =>           'SLA::create',
             'form.yaml' =>          'DynamicForm::create',
+            'list.yaml' =>          'DynamicList::create',
             // Note that department, sla, and forms are required for
             // help_topic
-            'help_topic.yaml' =>    'Topic::create',
+            'help_topic.yaml' =>    'Topic::__create',
             'filter.yaml' =>        'Filter::create',
             'team.yaml' =>          'Team::create',
             // Organization
             'organization.yaml' =>  'Organization::__create',
+            // Ticket
+            'ticket_status.yaml' =>  'TicketStatus::__create',
             // Note that group requires department
             'group.yaml' =>         'Group::create',
             'file.yaml' =>          'AttachmentFile::create',
+            'sequence.yaml' =>      'Sequence::__create',
         );
 
         $errors = array();
@@ -68,6 +74,9 @@ class Internationalization {
                 foreach ($objects as $o) {
                     if ($m && is_callable($m))
                         @call_user_func_array($m, array($o, &$errors));
+                    // TODO: Add a warning to the success page for errors
+                    //       found here
+                    $errors = array();
                 }
             }
         }
@@ -159,12 +168,41 @@ class Internationalization {
     }
 
     static function getLanguageDescription($lang) {
+        global $thisstaff, $thisclient;
+
         $langs = self::availableLanguages();
         $lang = strtolower($lang);
-        if (isset($langs[$lang]))
-            return $langs[$lang]['desc'];
+        if (isset($langs[$lang])) {
+            $info = &$langs[$lang];
+            if (!isset($info['desc'])) {
+                if (extension_loaded('intl')) {
+                    $lang = self::getCurrentLanguage();
+                    list($simple_lang,) = explode('_', $lang);
+                    $info['desc'] = sprintf("%s%s",
+                        // Display the localized name of the language
+                        Locale::getDisplayName($info['code'], $info['code']),
+                        // If the major language differes from the user's,
+                        // display the language in the user's language
+                        (strpos($simple_lang, $info['lang']) === false
+                            ? sprintf(' (%s)', Locale::getDisplayName($info['code'], $lang)) : '')
+                    );
+                }
+                else {
+                    $info['desc'] = sprintf("%s%s (%s)",
+                        $info['nativeName'],
+                        $info['locale'] ? sprintf(' - %s', $info['locale']) : '',
+                        $info['name']);
+                }
+            }
+            return $info['desc'];
+        }
         else
             return $lang;
+    }
+
+    static function getLanguageInfo($lang) {
+        $langs = self::availableLanguages();
+        return @$langs[strtolower($lang)] ?: array();
     }
 
     static function availableLanguages($base=I18N_DIR) {
@@ -187,17 +225,38 @@ class Internationalization {
                     'lang' => $code,
                     'locale' => $locale,
                     'path' => $f,
+                    'phar' => substr($f, -5) == '.phar',
                     'code' => $base,
-                    'desc' => sprintf("%s%s (%s)",
-                        $langs[$code]['nativeName'],
-                        $locale ? sprintf(' - %s', $locale) : '',
-                        $langs[$code]['name']),
+                );
+                $installed[strtolower($base)]['flag'] = strtolower(
+                    $langs[$code]['flag'] ?: $locale ?: $code
                 );
             }
         }
-        uasort($installed, function($a, $b) { return strcasecmp($a['code'], $b['code']); });
+        ksort($installed);
 
         return $cache = $installed;
+    }
+
+    static function isLanguageInstalled($code) {
+        $langs = self::availableLanguages();
+        return isset($langs[strtolower($code)]);
+    }
+
+    static function getConfiguredSystemLanguages() {
+        global $cfg;
+
+        if (!$cfg)
+            return self::availableLanguages();
+
+        $pri = $cfg->getPrimaryLanguage();
+        $langs = array($pri => self::getLanguageInfo($pri));
+
+        // Honor sorting preference of ::availableLanguages()
+        foreach ($cfg->getSecondaryLanguages() as $l) {
+            $langs[$l] = self::getLanguageInfo($l);
+        }
+        return $langs;
     }
 
     // TODO: Move this to the REQUEST class or some middleware when that
@@ -207,9 +266,9 @@ class Internationalization {
         global $cfg;
 
         if (empty($_SERVER["HTTP_ACCEPT_LANGUAGE"]))
-            return $cfg->getSystemLanguage();
+            return $cfg ? $cfg->getPrimaryLanguage() : 'en_US';
 
-        $languages = self::availableLanguages();
+        $languages = self::getConfiguredSystemLanguages();
 
         // The Accept-Language header contains information about the
         // language preferences configured in the user's browser / operating
@@ -283,7 +342,140 @@ class Internationalization {
           }
         }
 
-        return $best_match_langcode;
+        if (self::isLanguageInstalled($best_match_langcode))
+            return $best_match_langcode;
+        else
+            return $cfg->getPrimaryLanguage();
+    }
+
+    static function getCurrentLanguage($user=false) {
+        global $thisstaff, $thisclient;
+        static $session = null;
+
+        if (!isset($session))
+            $session = &$_SESSION['::lang'];
+
+        $user = $user ?: $thisstaff ?: $thisclient;
+        if ($user && method_exists($user, 'getLanguage'))
+            if ($lang = $user->getLanguage())
+                return $lang;
+
+        // Support the flag buttons for guests
+        if ((!$user || $user != $thisstaff) && $session)
+            return $session;
+
+        return self::getDefaultLanguage();
+    }
+
+    static function getCurrentLocale() {
+        global $thisstaff, $cfg;
+
+        if ($thisstaff) {
+            return $thisstaff->getLocale()
+                ?: self::getCurrentLanguage();
+        }
+        if (!$locale)
+            $locale = $cfg->getDefaultLocale();
+
+        if (!$locale)
+            $locale = self::getCurrentLanguage();
+
+        return $locale;
+    }
+
+
+    static function getTtfFonts() {
+        if (!class_exists('Phar'))
+            return;
+        $fonts = $subs = array();
+        foreach (self::availableLanguages() as $code=>$info) {
+            if (!$info['phar'] || !isset($info['fonts']))
+                continue;
+            foreach ($info['fonts'] as $simple => $collection) {
+                foreach ($collection as $type => $name) {
+                    list($name, $url) = $name;
+                    $ttffile = 'phar://' . $info['path'] . '/fonts/' . $name;
+                    if (file_exists($ttffile))
+                        $fonts[$simple][$type] = $ttffile;
+                }
+                if (@$collection[':sub'])
+                    $subs[] = $simple;
+            }
+        }
+        $rv = array($fonts, $subs);
+        Signal::send('config.ttfonts', null, $rv);
+        return $rv;
+    }
+
+    static function setCurrentLanguage($lang) {
+        if (!self::isLanguageInstalled($lang))
+            return false;
+
+        $_SESSION['::lang'] = $lang ?: null;
+        return true;
+    }
+
+    static function allLocales() {
+        $locales = array();
+        if (class_exists('ResourceBundle')) {
+            $current_lang = self::getCurrentLanguage();
+            $langs = array();
+            foreach (self::getConfiguredSystemLanguages() as $code=>$info) {
+                list($lang,) = explode('_', $code, 2);
+                $langs[$lang] = true;
+            }
+            foreach (ResourceBundle::getLocales('') as $code) {
+                list($lang,) = explode('_', $code, 2);
+                if (isset($langs[$lang])) {
+                    $locales[$code] = Locale::getDisplayName($code, $current_lang);
+                }
+            }
+        }
+        return $locales;
+    }
+
+    static function bootstrap() {
+
+        require_once INCLUDE_DIR . 'class.translation.php';
+
+        $domain = 'messages';
+        TextDomain::setDefaultDomain($domain);
+        TextDomain::lookup()->setPath(I18N_DIR);
+
+        // User-specific translations
+        function _N($msgid, $plural, $n) {
+            return TextDomain::lookup()->getTranslation()
+                ->ngettext($msgid, $plural, is_numeric($n) ? $n : 1);
+        }
+
+        // System-specific translations
+        function _S($msgid) {
+            global $cfg;
+            return __($msgid);
+        }
+        function _NS($msgid, $plural, $count) {
+            global $cfg;
+        }
+
+        // Phrases with separate contexts
+        function _P($context, $msgid) {
+            return TextDomain::lookup()->getTranslation()
+                ->pgettext($context, $msgid);
+        }
+        function _NP($context, $singular, $plural, $n) {
+            return TextDomain::lookup()->getTranslation()
+                ->npgettext($context, $singular, $plural, is_numeric($n) ? $n : 1);
+        }
+
+        // Language-specific translations
+        function _L($msgid, $locale) {
+            return TextDomain::lookup()->getTranslation($locale)
+                ->translate($msgid);
+        }
+        function _NL($msgid, $plural, $n, $locale) {
+            return TextDomain::lookup()->getTranslation($locale)
+                ->ngettext($msgid, $plural, is_numeric($n) ? $n : 1);
+        }
     }
 }
 
@@ -323,6 +515,14 @@ class DataTemplate {
             // TODO: If there was a parsing error, attempt to try the next
             //       language in the list of requested languages
         return $this->data;
+    }
+
+    function getRawData() {
+        if (!isset($this->data) && $this->filepath)
+            return file_get_contents($this->filepath);
+            // TODO: If there was a parsing error, attempt to try the next
+            //       language in the list of requested languages
+        return false;
     }
 
     function getLang() {

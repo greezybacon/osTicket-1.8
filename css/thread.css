@@ -109,8 +109,8 @@
   box-sizing: border-box;
 }
 .thread-body a {
-  color: #428bca;
-  text-decoration: none;
+  color: #428bca !important;
+  text-decoration: underline;
 }
 .thread-body a:hover,
 .thread-body a:focus {
@@ -394,7 +394,7 @@
 .thread-body blockquote,
 .thread-body pre {
 	font-size: 14px;
-	line-height: 1.25rem;
+	line-height: 1.4rem;
 }
 
 /* Adjust plain/text messages posted as <pre> in the thread body to show in

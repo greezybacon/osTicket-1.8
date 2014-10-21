@@ -4,65 +4,112 @@ if(!defined('OSTSTAFFINC') || !$faq || !$thisstaff) die('Access Denied');
 $category=$faq->getCategory();
 
 ?>
-<h2>Frequently Asked Questions</h2>
+<h2><?php echo __('Frequently Asked Questions');?></h2>
 <div id="breadcrumbs">
-    <a href="kb.php">All Categories</a>
+    <a href="kb.php"><?php echo __('All Categories');?></a>
     &raquo; <a href="kb.php?cid=<?php echo $category->getId(); ?>"><?php echo $category->getName(); ?></a>
-    <span class="faded">(<?php echo $category->isPublic()?'Public':'Internal'; ?>)</span>
+    <span class="faded">(<?php echo $category->isPublic()?__('Public'):__('Internal'); ?>)</span>
 </div>
-<div style="width:700px;padding-top:2px; float:left;">
-<strong style="font-size:16px;"><?php echo $faq->getQuestion() ?></strong>&nbsp;&nbsp;<span class="faded"><?php echo $faq->isPublished()?'(Published)':''; ?></span>
-</div>
-<div style="float:right;text-align:right;padding-top:5px;padding-right:5px;">
-<?php
-if($thisstaff->canManageFAQ()) {
-    echo sprintf('<a href="faq.php?id=%d&a=edit" class="Icon newHelpTopic">Edit FAQ</a>',
-            $faq->getId());
-}
-?>
-&nbsp;
-</div>
-<div class="clear"></div>
-<div class="thread-body">
-<?php echo $faq->getAnswerWithImages(); ?>
-</div>
-<div class="clear"></div>
-<p>
- <div><span class="faded"><b>Attachments:</b></span> <?php echo $faq->getAttachmentsLinks(); ?></div>
- <div><span class="faded"><b>Help Topics:</b></span>
-    <?php echo ($topics=$faq->getHelpTopics())?implode(', ',$topics):' '; ?>
+
+<div class="pull-right sidebar faq-meta">
+<?php if ($attachments = $faq->getVisibleAttachments()) { ?>
+<section>
+    <strong><?php echo __('Attachments');?>:</strong>
+<?php foreach ($attachments as $att) { ?>
+    <div>
+    <a href="file.php?h=<?php echo $att['download']; ?>" class="no-pjax">
+        <i class="icon-file"></i>
+        <?php echo Format::htmlchars($att['name']); ?>
+    </a>
     </div>
-</p>
-<div class="faded">&nbsp;Last updated <?php echo Format::db_daydatetime($faq->getUpdateDate()); ?></div>
-<hr>
+<?php } ?>
+</section>
+<?php } ?>
+
+<?php if ($faq->getHelpTopics()->count()) { ?>
+<section>
+    <strong><?php echo __('Help Topics'); ?></strong>
+<?php foreach ($faq->getHelpTopics() as $topic) { ?>
+    <div><?php echo $topic->getFullName(); ?></div>
+<?php } ?>
+</section>
+<?php } ?>
+
 <?php
-if($thisstaff->canManageFAQ()) {
-    //TODO: add js confirmation....
-    ?>
-   <div>
-    <form action="faq.php?id=<?php echo  $faq->getId(); ?>" method="post">
-	 <?php csrf_token(); ?>
-        <input type="hidden" name="id" value="<?php echo  $faq->getId(); ?>">
-        <input type="hidden" name="do" value="manage-faq">
-        <div>
-            <strong>Options: </strong>
-            <select name="a" style="width:200px;">
-                <option value="">Select Action</option>
-                <?php
-                if($faq->isPublished()) { ?>
-                <option value="unpublish">Unpublish FAQ</option>
-                <?php
-                }else{ ?>
-                <option value="publish">Publish FAQ</option>
-                <?php
-                } ?>
-                <option value="edit">Edit FAQ</option>
-                <option value="delete">Delete FAQ</option>
-            </select>
-            &nbsp;&nbsp;<input type="submit" name="submit" value="Go">
-        </div>
-    </form>
-   </div>
-<?php
+$displayLang = $faq->getDisplayLang();
+$otherLangs = array();
+if ($cfg->getPrimaryLanguage() != $displayLang)
+    $otherLangs[] = $cfg->getPrimaryLanguage();
+foreach ($faq->getAllTranslations() as $T) {
+    if ($T->lang != $displayLang)
+        $otherLangs[] = $T->lang;
 }
+if ($otherLangs) { ?>
+<section>
+    <div><strong><?php echo __('Other Languages'); ?></strong></div>
+<?php
+    foreach ($otherLangs as $lang) { ?>
+    <div><a href="faq.php?kblang=<?php echo $lang; ?>&id=<?php echo $faq->getId(); ?>">
+        <?php echo Internationalization::getLanguageDescription($lang); ?>
+    </a></div>
+    <?php } ?>
+</section>
+<?php } ?>
+
+<section>
+<div>
+    <strong><?php echo $faq->isPublished()?__('Published'):__('Internal'); ?></strong>
+</div>
+<a href="#"><?php echo __('manage access'); ?></a>
+</section>
+
+</div>
+
+<div class="faq-content">
+<div class="faq-manage pull-right">
+    <button>
+    <i class="icon-print"></i>
+<?php
+$query = array();
+parse_str($_SERVER['QUERY_STRING'], $query);
+$query['a'] = 'print';
+$query['id'] = $faq->getId();
+$query = http_build_query($query); ?>
+    <a href="faq.php?<?php echo $query; ?>" class="no-pjax"><?php
+        echo __('Print'); ?>
+    </a></button>
+<?php
+if ($thisstaff->canManageFAQ()) { ?>
+    <button>
+    <i class="icon-edit"></i>
+    <a href="faq.php?id=<?php echo $faq->getId(); ?>&a=edit"><?php
+        echo __('Edit FAQ'); ?>
+    </a></button>
+<?php } ?>
+</div>
+
+<div class="faq-title flush-left"><?php echo $faq->getLocalQuestion() ?>
+</div>
+
+<div class="faded"><?php echo __('Last updated');?>
+    <?php echo Format::daydatetime($category->getUpdateDate()); ?>
+</div>
+<br/>
+<div class="thread-body bleed">
+<?php echo $faq->getLocalAnswerWithImages(); ?>
+</div>
+
+</div>
+<div class="clear"></div>
+<hr>
+
+<?php
+if ($thisstaff->canManageFAQ()) { ?>
+<form action="faq.php?id=<?php echo  $faq->getId(); ?>" method="post">
+    <?php csrf_token(); ?>
+    <input type="hidden" name="do" value="manage-faq">
+    <input type="hidden" name="id" value="<?php echo  $faq->getId(); ?>">
+    <button name="a" value="delete"><?php echo __('Delete FAQ'); ?></button>
+</form>
+<?php }
 ?>

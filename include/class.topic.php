@@ -14,12 +14,34 @@
     vim: expandtab sw=4 ts=4 sts=4:
 **********************************************************************/
 
-class Topic {
-    var $id;
+require_once INCLUDE_DIR . 'class.sequence.php';
 
-    var $ht;
+class Topic extends VerySimpleModel {
 
-    var $parent;
+    static $meta = array(
+        'table' => TOPIC_TABLE,
+        'pk' => array('topic_id'),
+        'ordering' => array('topic'),
+        'joins' => array(
+            'parent' => array(
+                'list' => false,
+                'constraint' => array(
+                    'topic_pid' => 'Topic.topic_id',
+                ),
+            ),
+            'faqs' => array(
+                'list' => true,
+                'reverse' => 'FaqTopic.topic'
+            ),
+            'page' => array(
+                'null' => true,
+                'constraint' => array(
+                    'page_id' => 'Page.id',
+                ),
+            ),
+        ),
+    );
+
     var $page;
     var $form;
 
@@ -27,39 +49,15 @@ class Topic {
 
     const FORM_USE_PARENT = 4294967295;
 
-    function Topic($id) {
-        $this->id=0;
-        $this->load($id);
-    }
+    const FLAG_CUSTOM_NUMBERS = 0x0001;
 
-    function load($id=0) {
+    function __onload() {
         global $cfg;
-
-        if(!$id && !($id=$this->getId()))
-            return false;
-
-        $sql='SELECT ht.* '
-            .' FROM '.TOPIC_TABLE.' ht '
-            .' WHERE ht.topic_id='.db_input($id);
-
-        if(!($res=db_query($sql)) || !db_num_rows($res))
-            return false;
-
-        $this->ht = db_fetch_array($res);
-        $this->id = $this->ht['topic_id'];
-
-        $this->page = $this->form = null;
 
         // Handle upgrade case where sort has not yet been defined
         if (!$this->ht['sort'] && $cfg->getTopicSortMode() == 'a') {
             static::updateSortOrder();
         }
-
-        return true;
-    }
-
-    function reload() {
-        return $this->load();
     }
 
     function asVar() {
@@ -67,22 +65,23 @@ class Topic {
     }
 
     function getId() {
-        return $this->id;
+        return $this->topic_id;
     }
 
     function getPid() {
-        return $this->ht['topic_pid'];
+        return $this->topic_pid;
     }
 
     function getParent() {
-        if(!$this->parent && $this->getPid())
-            $this->parent = self::lookup($this->getPid());
-
         return $this->parent;
     }
 
     function getName() {
-        return $this->ht['topic'];
+        return $this->topic;
+    }
+
+    function getLocalName() {
+        return $this->getLocal('name');
     }
 
     function getFullName() {
@@ -95,27 +94,31 @@ class Topic {
     }
 
     function getDeptId() {
-        return $this->ht['dept_id'];
+        return $this->dept_id;
     }
 
     function getSLAId() {
-        return $this->ht['sla_id'];
+        return $this->sla_id;
     }
 
     function getPriorityId() {
-        return $this->ht['priority_id'];
+        return $this->priority_id;
+    }
+
+    function getStatusId() {
+        return $this->status_id;
     }
 
     function getStaffId() {
-        return $this->ht['staff_id'];
+        return $this->staff_id;
     }
 
     function getTeamId() {
-        return $this->ht['team_id'];
+        return $this->team_id;
     }
 
     function getPageId() {
-        return $this->ht['page_id'];
+        return $this->page_id;
     }
 
     function getPage() {
@@ -126,7 +129,7 @@ class Topic {
     }
 
     function getFormId() {
-        return $this->ht['form_id'];
+        return $this->form_id;
     }
 
     function getForm() {
@@ -141,7 +144,7 @@ class Topic {
     }
 
     function autoRespond() {
-        return (!$this->ht['noautoresp']);
+        return !$this->noautoresp;
     }
 
     function isEnabled() {
@@ -162,7 +165,7 @@ class Topic {
      *      there is a loop in the ancestry
      */
     function isActive(array $chain=array()) {
-        if (!$this->ht['isactive'])
+        if (!$this->isactive)
             return false;
 
         if (!isset($chain[$this->getId()]) && ($p = $this->getParent())) {
@@ -170,12 +173,12 @@ class Topic {
             return $p->isActive($chain);
         }
         else {
-            return $this->ht['isactive'];
+            return $this->isactive;
         }
     }
 
     function isPublic() {
-        return ($this->ht['ispublic']);
+        return ($this->ispublic);
     }
 
     function getHashtable() {
@@ -183,25 +186,45 @@ class Topic {
     }
 
     function getInfo() {
-        return $this->getHashtable();
+        $base = $this->getHashtable();
+        $base['custom-numbers'] = $this->hasFlag(self::FLAG_CUSTOM_NUMBERS);
+        return $base;
+    }
+
+    function hasFlag($flag) {
+        return $this->flags & $flag != 0;
+    }
+
+    function getNewTicketNumber() {
+        global $cfg;
+
+        if (!$this->hasFlag(self::FLAG_CUSTOM_NUMBERS))
+            return $cfg->getNewTicketNumber();
+
+        if ($this->sequence_id)
+            $sequence = Sequence::lookup($this->sequence_id);
+        if (!$sequence)
+            $sequence = new RandomSequence();
+
+        return $sequence->next($this->number_format ?: '######',
+            array('Ticket', 'isTicketNumberUnique'));
+    }
+
+    function getTranslateTag($subtag) {
+        return _H(sprintf('topic.%s.%s', $subtag, $this->getId()));
+    }
+    function getLocal($subtag) {
+        $tag = $this->getTranslateTag($subtag);
+        $T = CustomDataTranslation::translate($tag);
+        return $T != $tag ? $T : $this->ht[$subtag];
     }
 
     function setSortOrder($i) {
-        if ($i != $this->ht['sort']) {
-            $sql = 'UPDATE '.TOPIC_TABLE.' SET `sort`='.db_input($i)
-                .' WHERE `topic_id`='.db_input($this->getId());
-            return (db_query($sql) && db_affected_rows() == 1);
+        if ($i != $this->sort) {
+            $this->sort = $i;
+            return $this->save();
         }
         // Noop
-        return true;
-    }
-
-    function update($vars, &$errors) {
-
-        if(!$this->save($this->getId(), $vars, $errors))
-            return false;
-
-        $this->reload();
         return true;
     }
 
@@ -211,42 +234,71 @@ class Topic {
         if ($this->getId() == $cfg->getDefaultTopicId())
             return false;
 
-        $sql='DELETE FROM '.TOPIC_TABLE.' WHERE topic_id='.db_input($this->getId()).' LIMIT 1';
-        if(db_query($sql) && ($num=db_affected_rows())) {
-            db_query('UPDATE '.TOPIC_TABLE.' SET topic_pid=0 WHERE topic_pid='.db_input($this->getId()));
+        if (parent::delete()) {
+            self::objects()->filter(array(
+                'topic_pid' => $this->getId()
+            ))->update(array(
+                'topic_pid' => 0
+            ));
+            FaqTopic::objects()->filter(array(
+                'topic_id' => $this->getId()
+            ))->delete();
             db_query('UPDATE '.TICKET_TABLE.' SET topic_id=0 WHERE topic_id='.db_input($this->getId()));
-            db_query('DELETE FROM '.FAQ_TOPIC_TABLE.' WHERE topic_id='.db_input($this->getId()));
         }
 
-        return $num;
-    }
-    /*** Static functions ***/
-    function create($vars, &$errors) {
-        return self::save(0, $vars, $errors);
+        return true;
     }
 
-    static function getHelpTopics($publicOnly=false, $disabled=false) {
+    /*** Static functions ***/
+
+    static function create($vars=array()) {
+        $topic = parent::create($vars);
+        $topic->created = SqlFunction::NOW();
+        return $topic;
+    }
+
+    static function __create($vars, &$errors) {
+        $topic = self::create();
+        $topic->save($vars, $errors);
+        return $topic;
+    }
+
+    static function getHelpTopics($publicOnly=false, $disabled=false, $localize=true) {
         global $cfg;
         static $topics, $names;
 
-        if (!$names) {
-            $sql = 'SELECT topic_id, topic_pid, ispublic, isactive, topic FROM '.TOPIC_TABLE
-                . ' ORDER BY `sort`';
-            $res = db_query($sql);
+        // If localization is specifically requested, then rebuild the list.
+        if (!$names || $localize) {
+            $objects = self::objects()->values_flat(
+                'topic_id', 'topic_pid', 'ispublic', 'isactive', 'topic'
+            )
+            ->order_by('sort');
 
             // Fetch information for all topics, in declared sort order
             $topics = array();
-            while (list($id, $pid, $pub, $act, $topic) = db_fetch_row($res))
+            foreach ($objects as $T) {
+                list($id, $pid, $pub, $act, $topic) = $T;
                 $topics[$id] = array('pid'=>$pid, 'public'=>$pub,
                     'disabled'=>!$act, 'topic'=>$topic);
+            }
+
+            $localize_this = function($id, $default) use ($localize) {
+                if (!$localize)
+                    return $default;
+
+                $tag = _H("topic.name.{$id}");
+                $T = CustomDataTranslation::translate($tag);
+                return $T != $tag ? $T : $default;
+            };
 
             // Resolve parent names
             foreach ($topics as $id=>$info) {
-                $name = $info['topic'];
+                $name = $localize_this($id, $info['topic']);
                 $loop = array($id=>true);
                 $parent = false;
-                while ($info['pid'] && ($info = $topics[$info['pid']])) {
-                    $name = sprintf('%s / %s', $info['topic'], $name);
+                while (($pid = $info['pid']) && ($info = $topics[$info['pid']])) {
+                    $name = sprintf('%s / %s', $localize_this($pid, $info['topic']),
+                        $name);
                     if ($parent && $parent['disabled'])
                         // Cascade disabled flag
                         $topics[$id]['disabled'] = true;
@@ -268,102 +320,106 @@ class Topic {
             if (!$disabled && $info['disabled'])
                 continue;
             if ($disabled === self::DISPLAY_DISABLED && $info['disabled'])
-                $n .= " &mdash; (disabled)";
+                $n .= " &mdash; ".__("(disabled)");
             $requested_names[$id] = $n;
         }
+
+        // XXX: If localization requested and the current locale is not the
+        // primary, the list may need to be sorted. Caching is ok here,
+        // because the locale is not going to be changed within a single
+        // request.
 
         return $requested_names;
     }
 
-    function getPublicHelpTopics() {
+    static function getPublicHelpTopics() {
         return self::getHelpTopics(true);
     }
 
-    function getAllHelpTopics() {
-        return self::getHelpTopics(false, true);
+    static function getAllHelpTopics($localize=false) {
+        return self::getHelpTopics(false, true, $localize);
     }
 
-    function getIdByName($name, $pid=0) {
+    static function getIdByName($name, $pid=0) {
+        $list = self::objects()->filter(array(
+            'topic'=>$name,
+            'topic_pid'=>$pid,
+        ))->values_flat('topic_id')->one();
 
-        $sql='SELECT topic_id FROM '.TOPIC_TABLE
-            .' WHERE topic='.db_input($name)
-            .' AND topic_pid='.db_input($pid);
-        if(($res=db_query($sql)) && db_num_rows($res))
-            list($id) = db_fetch_row($res);
-
-        return $id;
+        if ($list)
+            return $list[0];
     }
 
-    static function lookup($id) {
-        return ($id && is_numeric($id) && ($t= new Topic($id)) && $t->getId()==$id)?$t:null;
-    }
-
-    function save($id, $vars, &$errors) {
+    function update($vars, &$errors) {
         global $cfg;
 
-        $vars['topic']=Format::striptags(trim($vars['topic']));
+        $vars['topic'] = Format::striptags(trim($vars['topic']));
 
-        if($id && $id!=$vars['id'])
-            $errors['err']='Internal error. Try again';
+        if (isset($this->topic_id) && $this->getId() != $vars['id'])
+            $errors['err']=__('Internal error occurred');
 
-        if(!$vars['topic'])
-            $errors['topic']='Help topic required';
-        elseif(strlen($vars['topic'])<5)
-            $errors['topic']='Topic is too short. 5 chars minimum';
-        elseif(($tid=self::getIdByName($vars['topic'], $vars['topic_pid'])) && $tid!=$id)
-            $errors['topic']='Topic already exists';
+        if (!$vars['topic'])
+            $errors['topic']=__('Help topic name is required');
+        elseif (strlen($vars['topic'])<5)
+            $errors['topic']=__('Topic is too short. Five characters minimum');
+        elseif (($tid=self::getIdByName($vars['topic'], $vars['topic_pid']))
+                && $tid!=$this->getId())
+            $errors['topic']=__('Topic already exists');
 
         if (!is_numeric($vars['dept_id']))
-            $errors['dept_id']='You must select a department';
+            $errors['dept_id']=__('Department selection is required');
 
-        if($errors) return false;
+        if ($vars['custom-numbers'] && !preg_match('`(?!<\\\)#`', $vars['number_format']))
+            $errors['number_format'] =
+                'Ticket number format requires at least one hash character (#)';
 
-        foreach (array('sla_id','form_id','page_id','topic_pid') as $f)
-            if (!isset($vars[$f]))
-                $vars[$f] = 0;
+        if ($errors)
+            return false;
 
-        $sql=' updated=NOW() '
-            .',topic='.db_input($vars['topic'])
-            .',topic_pid='.db_input($vars['topic_pid'])
-            .',dept_id='.db_input($vars['dept_id'])
-            .',priority_id='.db_input($vars['priority_id'])
-            .',sla_id='.db_input($vars['sla_id'])
-            .',form_id='.db_input($vars['form_id'])
-            .',page_id='.db_input($vars['page_id'])
-            .',isactive='.db_input($vars['isactive'])
-            .',ispublic='.db_input($vars['ispublic'])
-            .',noautoresp='.db_input(isset($vars['noautoresp']) && $vars['noautoresp']?1:0)
-            .',notes='.db_input(Format::sanitize($vars['notes']));
+        $this->topic = $vars['topic'];
+        $this->topic_pid = $vars['topic_pid'] ?: 0;
+        $this->dept_id = $vars['dept_id'];
+        $this->priority_id = $vars['priority_id'] ?: 0;
+        $this->status_id = $vars['status_id'] ?: 0;
+        $this->sla_id = $vars['sla_id'] ?: 0;
+        $this->form_id = $vars['form_id'] ?: 0;
+        $this->page_id = $vars['page_id'] ?: 0;
+        $this->isactive = !!$vars['isactive'];
+        $this->ispublic = !!$vars['ispublic'];
+        $this->sequence_id = $vars['custom-numbers'] ? $vars['sequence_id'] : 0;
+        $this->number_format = $vars['custom-numbers'] ? $vars['number_format'] : '';
+        $this->flags = $vars['custom-numbers'] ? self::FLAG_CUSTOM_NUMBERS : 0;
+        $this->noautoresp = !!$vars['noautoresp'];
+        $this->notes = Format::sanitize($vars['notes']);
 
         //Auto assign ID is overloaded...
-        if($vars['assign'] && $vars['assign'][0]=='s')
-             $sql.=',team_id=0, staff_id='.db_input(preg_replace("/[^0-9]/", "", $vars['assign']));
-        elseif($vars['assign'] && $vars['assign'][0]=='t')
-            $sql.=',staff_id=0, team_id='.db_input(preg_replace("/[^0-9]/", "", $vars['assign']));
-        else
-            $sql.=',staff_id=0, team_id=0 '; //no auto-assignment!
+        if ($vars['assign'] && $vars['assign'][0] == 's') {
+            $this->team_id = 0;
+            $this->staff_id = preg_replace("/[^0-9]/", "", $vars['assign']);
+        }
+        elseif ($vars['assign'] && $vars['assign'][0] == 't') {
+            $this->staff_id = 0;
+            $this->team_id = preg_replace("/[^0-9]/", "", $vars['assign']);
+        }
+        else {
+            $this->staff_id = 0;
+            $this->team_id = 0;
+        }
 
         $rv = false;
-        if ($id) {
-            $sql='UPDATE '.TOPIC_TABLE.' SET '.$sql.' WHERE topic_id='.db_input($id);
-            if (!($rv = db_query($sql)))
-                $errors['err']='Unable to update topic. Internal error occurred';
-        } else {
-            if (isset($vars['topic_id']))
-                $sql .= ', topic_id='.db_input($vars['topic_id']);
-            // If in manual sort mode, place the new item directly below the
-            // parent item
-            if ($vars['topic_pid'] && $cfg && $cfg->getTopicSortMode() != 'a') {
-                $sql .= ', `sort`='.db_input(
-                    db_result(db_query('SELECT COALESCE(`sort`,0)+1 FROM '.TOPIC_TABLE
-                        .' WHERE `topic_id`='.db_input($vars['topic_pid']))));
+        if ($this->__new__) {
+            if (isset($this->topic_pid)
+                    && ($parent = Topic::lookup($this->topic_pid))) {
+                $this->sort = ($parent->sort ?: 0) + 1;
             }
-
-            $sql='INSERT INTO '.TOPIC_TABLE.' SET '.$sql.',created=NOW()';
-            if (db_query($sql) && ($id = db_insert_id()))
-                $rv = $id;
-            else
-                $errors['err']='Unable to create the topic. Internal error';
+            if (!($rv = $this->save())) {
+                $errors['err']=sprintf(__('Unable to create %s.'), __('this help topic'))
+               .' '.__('Internal error occurred');
+            }
+        }
+        elseif (!($rv = $this->save())) {
+            $errors['err']=sprintf(__('Unable to update %s.'), __('this help topic'))
+            .' '.__('Internal error occurred');
         }
         if (!$cfg || $cfg->getTopicSortMode() == 'a') {
             static::updateSortOrder();
@@ -371,17 +427,37 @@ class Topic {
         return $rv;
     }
 
+    function save($refetch=false) {
+        if ($this->dirty)
+            $this->updated = SqlFunction::NOW();
+        return parent::save($refetch || $this->dirty);
+    }
+
     static function updateSortOrder() {
+        global $cfg;
+
         // Fetch (un)sorted names
-        if (!($names = static::getHelpTopics(false, true)))
+        if (!($names = static::getHelpTopics(false, true, false)))
             return;
 
-        uasort($names, function($a, $b) { return strcmp($a, $b); });
+        if ($cfg && function_exists('collator_create')) {
+            $coll = Collator::create($cfg->getPrimaryLanguage());
+            // UASORT is necessary to preserve the keys
+            uasort($names, function($a, $b) use ($coll) {
+                return $coll->compare($a, $b); });
+        }
+        else {
+            // Really only works on English names
+            asort($names);
+        }
 
         $update = array_keys($names);
         foreach ($update as $idx=>&$id) {
             $id = sprintf("(%s,%s)", db_input($id), db_input($idx+1));
         }
+        if (!count($update))
+            return;
+
         // Thanks, http://stackoverflow.com/a/3466
         $sql = sprintf('INSERT INTO `%s` (topic_id,`sort`) VALUES %s
             ON DUPLICATE KEY UPDATE `sort`=VALUES(`sort`)',
@@ -391,4 +467,4 @@ class Topic {
 }
 
 // Add fields from the standard ticket form to the ticket filterable fields
-Filter::addSupportedMatches('Help Topic', array('topicId' => 'Topic ID'), 100);
+Filter::addSupportedMatches(/* @trans */ 'Help Topic', array('topicId' => 'Topic ID'), 100);

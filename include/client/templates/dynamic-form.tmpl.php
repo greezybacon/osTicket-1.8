@@ -5,6 +5,8 @@
     ?>
     <tr><td colspan="2"><hr />
     <div class="form-header" style="margin-bottom:0.5em">
+    <?php print ($form instanceof DynamicFormEntry) 
+        ? $form->getForm()->getMedia() : $form->getMedia(); ?>
     <h3><?php echo Format::htmlchars($form->getTitle()); ?></h3>
     <em><?php echo Format::htmlchars($form->getInstructions()); ?></em>
     </div>
@@ -14,30 +16,28 @@
     // 'private' are not included in the output for clients
     global $thisclient;
     foreach ($form->getFields() as $field) {
-        if ($field->get('private'))
+        if (!$field->isVisibleToUsers())
             continue;
         ?>
         <tr>
-            <?php if ($field->isBlockLevel()) { ?>
-                <td colspan="2">
-            <?php
-            }
-            else { ?>
-                <td><label for="<?php echo $field->getFormName(); ?>" class="<?php
+            <td colspan="2" style="padding-top:8px;">
+                <label for="<?php echo $field->getFormName(); ?>"><span class="<?php
                     if ($field->get('required')) echo 'required'; ?>">
-                <?php echo Format::htmlchars($field->get('label')); ?>:</label></td><td>
-            <?php
-            }
-            $field->render('client'); ?>
+                <?php echo Format::htmlchars($field->getLocal('label')); ?>
             <?php if ($field->get('required')) { ?>
-                <font class="error">*</font>
+                <span class="error">*</span>
             <?php
             }
+            ?></span><?php
             if ($field->get('hint') && !$field->isBlockLevel()) { ?>
                 <br /><em style="color:gray;display:inline-block"><?php
-                    echo Format::htmlchars($field->get('hint')); ?></em>
+                    echo Format::htmlchars($field->getLocal('hint')); ?></em>
             <?php
-            }
+            } ?>
+            <br/>
+            <?php
+            $field->render('client');
+            ?></label><?php
             foreach ($field->errors() as $e) { ?>
                 <br />
                 <font class="error"><?php echo $e; ?></font>

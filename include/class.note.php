@@ -27,8 +27,8 @@ class QuickNoteModel extends VerySimpleModel {
 class QuickNote extends QuickNoteModel {
 
     static $types = array(
-        'U' => 'User',
-        'O' => 'Organization',
+        'U' => /* @trans */ 'User',
+        'O' => /* @trans */ 'Organization',
     );
     var $_staff;
 
@@ -44,7 +44,7 @@ class QuickNote extends QuickNoteModel {
     }
 
     function getFormattedTime() {
-        return Format::db_datetime(strpos($this->updated, '0000-') !== 0
+        return Format::datetime(strpos($this->updated, '0000-') !== 0
             ? $this->updated : $this->created);
     }
 
@@ -62,7 +62,10 @@ class QuickNote extends QuickNoteModel {
     }
 
     function getIconTitle() {
-        return sprintf("%s Note", static::$types[$this->ext_id[0]]);
+        return sprintf(__(
+            // `%s` will be the type of note (`user` or `orgnaization`)
+            "%s Note"),
+            __(static::$types[$this->ext_id[0]]));
     }
 
     static function forUser($user, $org=false) {

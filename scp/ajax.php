@@ -55,11 +55,13 @@ $dispatcher = patterns('',
         url_get('^help-topic/(?P<id>\d+)$', 'getFormsForHelpTopic'),
         url_get('^field-config/(?P<id>\d+)$', 'getFieldConfiguration'),
         url_post('^field-config/(?P<id>\d+)$', 'saveFieldConfiguration'),
-        url_delete('^answer/(?P<entry>\d+)/(?P<field>\d+)$', 'deleteAnswer')
+        url_delete('^answer/(?P<entry>\d+)/(?P<field>\d+)$', 'deleteAnswer'),
+        url_post('^upload/(\d+)?$', 'upload'),
+        url_post('^upload/(\w+)?$', 'attach')
     )),
     url('^/list/', patterns('ajax.forms.php:DynamicFormsAjaxAPI',
-        url_get('^item/(?P<id>\d+)/properties$', 'getListItemProperties'),
-        url_post('^item/(?P<id>\d+)/properties$', 'saveListItemProperties')
+        url_get('^(?P<list>\w+)/item/(?P<id>\d+)/properties$', 'getListItemProperties'),
+        url_post('^(?P<list>\w+)/item/(?P<id>\d+)/properties$', 'saveListItemProperties')
     )),
     url('^/report/overview/', patterns('ajax.reports.php:OverviewReportAjaxAPI',
         # Send
@@ -135,11 +137,15 @@ $dispatcher = patterns('',
         url_get('^(?P<tid>\d+)/add-collaborator/(?P<uid>\d+)$', 'addCollaborator'),
         url_get('^(?P<tid>\d+)/add-collaborator/auth:(?P<bk>\w+):(?P<id>.+)$', 'addRemoteCollaborator'),
         url('^(?P<tid>\d+)/add-collaborator$', 'addCollaborator'),
-        url_get('^lookup', 'lookup'),
-        url_get('^search', 'search'),
         url_get('^(?P<tid>\d+)/forms/manage$', 'manageForms'),
         url_post('^(?P<tid>\d+)/forms/manage$', 'updateForms'),
-        url_get('^(?P<tid>\d+)/canned-resp/(?P<cid>\w+).(?P<format>json|txt)', 'cannedResponse')
+        url_get('^(?P<tid>\d+)/canned-resp/(?P<cid>\w+).(?P<format>json|txt)', 'cannedResponse'),
+        url_get('^(?P<tid>\d+)/status/(?P<status>\w+)(?:/(?P<sid>\d+))?$', 'changeTicketStatus'),
+        url_post('^(?P<tid>\d+)/status$', 'setTicketStatus'),
+        url_get('^status/(?P<status>\w+)(?:/(?P<sid>\d+))?$', 'changeSelectedTicketsStatus'),
+        url_post('^status/(?P<state>\w+)$', 'setSelectedTicketsStatus'),
+        url_get('^lookup', 'lookup'),
+        url_get('^search', 'search')
     )),
     url('^/collaborators/', patterns('ajax.tickets.php:TicketsAjaxAPI',
         url_get('^(?P<cid>\d+)/view$', 'viewCollaborator'),
@@ -149,6 +155,7 @@ $dispatcher = patterns('',
         url_post('^(?P<id>\d+)$', 'updateDraft'),
         url_delete('^(?P<id>\d+)$', 'deleteDraft'),
         url_post('^(?P<id>\d+)/attach$', 'uploadInlineImage'),
+        url_post('^(?P<namespace>[\w.]+)/attach$', 'uploadInlineImageEarly'),
         url_get('^(?P<namespace>[\w.]+)$', 'getDraft'),
         url_post('^(?P<namespace>[\w.]+)$', 'createDraft'),
         url_get('^images/browse$', 'getFileList')
@@ -159,10 +166,21 @@ $dispatcher = patterns('',
         url_delete('^(?P<id>\d+)$', 'deleteNote'),
         url_post('^attach/(?P<ext_id>\w\d+)$', 'createNote')
     )),
+    url('^/sequence/', patterns('ajax.sequence.php:SequenceAjaxAPI',
+        url_get('^(?P<id>\d+)$', 'current'),
+        url_get('^manage$', 'manage'),
+        url_post('^manage$', 'manage')
+    )),
     url_post('^/upgrader', array('ajax.upgrader.php:UpgraderAjaxAPI', 'upgrade')),
     url('^/help/', patterns('ajax.tips.php:HelpTipAjaxAPI',
         url_get('^tips/(?P<namespace>[\w_.]+)$', 'getTipsJson'),
         url_get('^(?P<lang>[\w_]+)?/tips/(?P<namespace>[\w_.]+)$', 'getTipsJsonForLang')
+    )),
+    url('^/i18n/', patterns('ajax.i18n.php:i18nAjaxAPI',
+        url_get('^langs$', 'getSecondaryLanguages'),
+        url_get('^translate/(?P<tag>\w+)$', 'getTranslations'),
+        url_post('^translate/(?P<tag>\w+)$', 'updateTranslations'),
+        url_get('^(?P<lang>[\w_]+)/(?P<tag>\w+)$', 'getLanguageFile')
     ))
 );
 

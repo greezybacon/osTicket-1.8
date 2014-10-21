@@ -13,6 +13,7 @@
 
     vim: expandtab sw=4 ts=4 sts=4:
 **********************************************************************/
+
 class SLA {
 
     var $id;
@@ -93,6 +94,20 @@ class SLA {
         return ($this->ht['enable_priority_escalation']);
     }
 
+    function getTranslateTag($subtag) {
+        return _H(sprintf('sla.%s.%s', $subtag, $this->id));
+    }
+    function getLocal($subtag) {
+        $tag = $this->getTranslateTag($subtag);
+        $T = CustomDataTranslation::translate($tag);
+        return $T != $tag ? $T : $this->ht[$subtag];
+    }
+    static function getLocalById($id, $subtag, $default) {
+        $tag = _H(sprintf('sla.%s.%s', $subtag, $id));
+        $T = CustomDataTranslation::translate($tag);
+        return $T != $tag ? $T : $default;
+    }
+
     function update($vars,&$errors) {
 
         if(!SLA::save($this->getId(),$vars,$errors))
@@ -132,13 +147,15 @@ class SLA {
     function getSLAs() {
 
         $slas=array();
+
         $sql='SELECT id, name, isactive, grace_period FROM '.SLA_TABLE.' ORDER BY name';
         if(($res=db_query($sql)) && db_num_rows($res)) {
             while($row=db_fetch_array($res))
-                $slas[$row['id']] = sprintf('%s (%d hrs - %s)',
-                        $row['name'],
+                $slas[$row['id']] = sprintf(__('%s (%d hours - %s)'
+                        /* Tokens are <name> (<#> hours - <Active|Disabled>) */),
+                        self::getLocalById($row['id'], 'name', $row['name']),
                         $row['grace_period'],
-                        $row['isactive']?'Active':'Disabled');
+                        $row['isactive']?__('Active'):__('Disabled'));
         }
 
         return $slas;
@@ -160,16 +177,15 @@ class SLA {
 
     function save($id,$vars,&$errors) {
 
-
         if(!$vars['grace_period'])
-            $errors['grace_period']='Grace period required';
+            $errors['grace_period']=__('Grace period required');
         elseif(!is_numeric($vars['grace_period']))
-            $errors['grace_period']='Numeric value required (in hours)';
+            $errors['grace_period']=__('Numeric value required (in hours)');
 
         if(!$vars['name'])
-            $errors['name']='Name required';
+            $errors['name']=__('Name is required');
         elseif(($sid=SLA::getIdByName($vars['name'])) && $sid!=$id)
-            $errors['name']='Name already exists';
+            $errors['name']=__('Name already exists');
 
         if($errors) return false;
 
@@ -186,7 +202,8 @@ class SLA {
             if(db_query($sql))
                 return true;
 
-            $errors['err']='Unable to update SLA. Internal error occurred';
+            $errors['err']=sprintf(__('Unable to update %s.'), __('this SLA plan'))
+               .' '.__('Internal error occurred');
         }else{
             if (isset($vars['id']))
                 $sql .= ', id='.db_input($vars['id']);
@@ -195,7 +212,8 @@ class SLA {
             if(db_query($sql) && ($id=db_insert_id()))
                 return $id;
 
-            $errors['err']='Unable to add SLA. Internal error';
+            $errors['err']=sprintf(__('Unable to add %s.'), __('this SLA plan'))
+               .' '.__('Internal error occurred');
         }
 
         return false;

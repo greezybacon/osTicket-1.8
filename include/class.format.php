@@ -30,7 +30,7 @@ class Format {
         return round(($bytes/1048576),1).' mb';
     }
 
-    /* encode text into desired encoding - taking into accout charset when available. */
+	/* encode text into desired encoding - taking into accout charset when available. */
     function encode($text, $charset=null, $encoding='utf-8') {
 
         //Try auto-detecting charset/encoding
@@ -73,9 +73,10 @@ class Format {
                 $str.= Format::encode($part->text, $part->charset, $encoding);
 
             $text = $str;
-        } elseif(function_exists('iconv_mime_decode')) {
+        } elseif($text[0] == '=' && function_exists('iconv_mime_decode')) {
             $text = iconv_mime_decode($text, 0, $encoding);
-        } elseif(!strcasecmp($encoding, 'utf-8') && function_exists('imap_utf8')) {
+        } elseif(!strcasecmp($encoding, 'utf-8')
+                && function_exists('imap_utf8')) {
             $text = imap_utf8($text);
         }
 
@@ -269,12 +270,16 @@ class Format {
     }
 
     function htmlencode($var) {
+        static $phpversion = null;
 
         if (is_array($var))
             return array_map(array('Format', 'htmlencode'), $var);
 
+        if (!isset($phpversion))
+            $phpversion = phpversion();
+
         $flags = ENT_COMPAT;
-        if (phpversion() >= '5.4.0')
+        if ($phpversion >= '5.4.0')
             $flags |= ENT_HTML401;
 
         try {
@@ -467,34 +472,149 @@ class Format {
         return $tstring;
     }
 
-    /* Dates helpers...most of this crap will change once we move to PHP 5*/
-    function db_date($time) {
+    function __formatDate($timestamp, $format, $fromDb, $dayType, $timeType,
+            $strftimeFallback, $timezone) {
         global $cfg;
-        return Format::userdate($cfg->getDateFormat(), Misc::db2gmtime($time));
+
+        if ($timestamp && $fromDb) {
+            $timestamp = Misc::db2gmtime($timestamp);
+        }
+        elseif (!$timestamp) {
+            $D = new DateTime();
+            $timestamp = $D->getTimestamp();
+        }
+        if (class_exists('IntlDateFormatter')) {
+            $formatter = new IntlDateFormatter(
+                Internationalization::getCurrentLocale(),
+                $dayType,
+                $timeType,
+                $timezone,
+                IntlDateFormatter::GREGORIAN,
+                $format ?: null
+            );
+            if ($cfg->isForce24HourTime()) {
+                $format = str_replace(array('a', 'h'), array('', 'H'),
+                    $formatter->getPattern());
+                $formatter->setPattern($format);
+            }
+            return $formatter->format($timestamp);
+        }
+        // Fallback using strftime
+        $format = self::getStrftimeFormat($format);
+        // TODO: Properly convert to local time
+        $time = DateTime::createFromFormat('U', $timestamp, new DateTimeZone('UTC'));
+        $time->setTimeZone(new DateTimeZone($cfg->getTimeZone()));
+        $timestamp = $time->getTimestamp();
+        return strftime($format ?: $strftimeFallback, $timestamp);
     }
 
-    function db_datetime($time) {
+    function parseDate($date, $format=false) {
         global $cfg;
-        return Format::userdate($cfg->getDateTimeFormat(), Misc::db2gmtime($time));
+
+        if (class_exists('IntlDateFormatter')) {
+            $formatter = new IntlDateFormatter(
+                Internationalization::getCurrentLocale(),
+                null,
+                null,
+                null,
+                IntlDateFormatter::GREGORIAN,
+                $format ?: null
+            );
+            if ($cfg->isForce24HourTime()) {
+                $format = str_replace(array('a', 'h'), array('', 'H'),
+                    $formatter->getPattern());
+                $formatter->setPattern($format);
+            }
+            return $formatter->parse($date);
+        }
+        // Fallback using strtotime
+        return strtotime($date);
     }
 
-    function db_daydatetime($time) {
+    function time($timestamp, $fromDb=true, $format=false, $timezone=false) {
         global $cfg;
-        return Format::userdate($cfg->getDayDateTimeFormat(), Misc::db2gmtime($time));
+
+        return self::__formatDate($timestamp,
+            $format ?: $cfg->getTimeFormat(), $fromDb,
+            IntlDateFormatter::NONE, IntlDateFormatter::SHORT,
+            '%x', $timezone ?: $cfg->getTimeZone());
     }
 
-    function userdate($format, $gmtime) {
-        return Format::date($format, $gmtime, $_SESSION['TZ_OFFSET'], $_SESSION['TZ_DST']);
+    function date($timestamp, $fromDb=true, $format=false, $timezone=false) {
+        global $cfg;
+
+        return self::__formatDate($timestamp,
+            $format ?: $cfg->getDateFormat(), $fromDb,
+            IntlDateFormatter::SHORT, IntlDateFormatter::NONE,
+            '%X', $timezone ?: $cfg->getTimeZone());
     }
 
-    function date($format, $gmtimestamp, $offset=0, $daylight=false){
+    function datetime($timestamp, $fromDb=true, $timezone=false) {
+        global $cfg;
 
-        if(!$gmtimestamp || !is_numeric($gmtimestamp))
-            return "";
+        return self::__formatDate($timestamp,
+            $format ?: $cfg->getDateTimeFormat(), $fromDb,
+            IntlDateFormatter::SHORT, IntlDateFormatter::SHORT,
+            '%X %x', $timezone ?: $cfg->getTimeZone());
+    }
 
-        $offset+=$daylight?date('I', $gmtimestamp):0; //Daylight savings crap.
+    function daydatetime($timestamp, $fromDb=true, $timezone=false) {
+        global $cfg;
 
-        return date($format, ($gmtimestamp+ ($offset*3600)));
+        return self::__formatDate($timestamp,
+            $format ?: $cfg->getDayDateTimeFormat(), $fromDb,
+            IntlDateFormatter::FULL, IntlDateFormatter::SHORT,
+            '%X %x', $timezone ?: $cfg->getTimeZone());
+    }
+
+    function getStrftimeFormat($format) {
+        static $dateToStrftime = array(
+            '%d' => 'dd',
+            '%a' => 'EEE',
+            '%e' => 'd',
+            '%A' => 'EEEE',
+            '%w' => 'e',
+            '%w' => 'c',
+            '%z' => 'D',
+
+            '%V' => 'w',
+
+            '%B' => 'MMMM',
+            '%m' => 'MM',
+            '%b' => 'MMM',
+
+            '%g' => 'Y',
+            '%G' => 'Y',
+            '%Y' => 'y',
+            '%y' => 'yy',
+
+            '%P' => 'a',
+            '%l' => 'h',
+            '%k' => 'H',
+            '%I' => 'hh',
+            '%H' => 'HH',
+            '%M' => 'mm',
+            '%S' => 'ss',
+
+            '%z' => 'ZZZ',
+            '%Z' => 'z',
+        );
+
+        $flipped = array_flip($dateToStrftime);
+        krsort($flipped);
+        // Also establish a list of ids, so we can do a creative replacement
+        // without clobbering the common letters in the formats
+        $ids = array_keys($flipped);
+        $ids = array_flip($ids);
+        foreach ($flipped as $icu=>$date) {
+            $format = str_replace($date, chr($ids[$icu]), $format);
+        }
+        return preg_replace_callback('`[\x00-\x1f]`',
+            function($m) use ($ids) {
+                return $ids[ord($m[0])];
+            },
+            $format
+        );
     }
 
     // Thanks, http://stackoverflow.com/a/2955878/1025836
@@ -569,5 +689,65 @@ class Format {
         );
     }
 
+    // Performs Unicode normalization (where possible) and splits words at
+    // difficult word boundaries (for far eastern languages)
+    function searchable($text, $lang=false) {
+        global $cfg;
+
+        if (function_exists('normalizer_normalize')) {
+            // Normalize text input :: remove diacritics and such
+            $text = normalizer_normalize($text, Normalizer::FORM_C);
+        }
+        else {
+            // As a lightweight compatiblity, use a lightweight C
+            // normalizer with diacritic removal, thanks
+            // http://ahinea.com/en/tech/accented-translate.html
+            $tr = array(
+                "ä" => "a", "ñ" => "n", "ö" => "o", "ü" => "u", "ÿ" => "y"
+            );
+            $text = strtr($text, $tr);
+        }
+        // Decompose compatible versions of characters (ä => ae)
+        $tr = array(
+            "ß" => "ss", "Æ" => "AE", "æ" => "ae", "Ĳ" => "IJ",
+            "ĳ" => "ij", "Œ" => "OE", "œ" => "oe", "Ð" => "D",
+            "Đ" => "D", "ð" => "d", "đ" => "d", "Ħ" => "H", "ħ" => "h",
+            "ı" => "i", "ĸ" => "k", "Ŀ" => "L", "Ł" => "L", "ŀ" => "l",
+            "ł" => "l", "Ŋ" => "N", "ŉ" => "n", "ŋ" => "n", "Ø" => "O",
+            "ø" => "o", "ſ" => "s", "Þ" => "T", "Ŧ" => "T", "þ" => "t",
+            "ŧ" => "t", "ä" => "ae", "ö" => "oe", "ü" => "ue",
+            "Ä" => "AE", "Ö" => "OE", "Ü" => "UE",
+        );
+        $text = strtr($text, $tr);
+
+        // Drop separated diacritics
+        $text = preg_replace('/\p{M}/u', '', $text);
+
+        // Drop extraneous whitespace
+        $text = preg_replace('/(\s)\s+/u', '$1', $text);
+
+        // Drop leading and trailing whitespace
+        $text = trim($text);
+
+        if (class_exists('IntlBreakIterator')) {
+            // Split by word boundaries
+            if ($tokenizer = IntlBreakIterator::createWordInstance(
+                    $lang ?: ($cfg ? $cfg->getSystemLanguage() : 'en_US'))
+            ) {
+                $tokenizer->setText($text);
+                $tokens = array();
+                foreach ($tokenizer as $token)
+                    $tokens[] = $token;
+                $text = implode(' ', $tokens);
+            }
+        }
+        else {
+            // Approximate word boundaries from Unicode chart at
+            // http://www.unicode.org/reports/tr29/#Word_Boundaries
+
+            // Punt for now
+        }
+        return $text;
+    }
 }
 ?>
