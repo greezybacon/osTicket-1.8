@@ -98,8 +98,21 @@ class DynamicForm extends VerySimpleModel {
     function getTitle() { return $this->get('title'); }
     function getInstructions() { return $this->get('instructions'); }
 
+    /**
+     * Drop field errors clean info etc. Useful when replacing the source
+     * content of the form. This is necessary because the field listing is
+     * cached under some circumstances.
+     */
+    function reset() {
+        foreach ($this->getFields() as $f)
+            $f->reset();
+        return $this;
+    }
+
     function getForm($source=false) {
         if (!$this->_form || $source) {
+            if ($source)
+                $this->reset();
             $fields = $this->getFields();
             $this->_form = new Form($fields, $source, array(
                 'title'=>$this->title, 'instructions'=>$this->instructions));
