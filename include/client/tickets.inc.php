@@ -10,6 +10,7 @@ if(isset($_REQUEST['status'])) { //Query string status has nothing to do with th
     switch(strtolower($_REQUEST['status'])) {
      case 'open':
 		$results_type=__('Open Tickets');
+	break;
      case 'closed':
 		$results_type=__('Closed Tickets');
         break;
