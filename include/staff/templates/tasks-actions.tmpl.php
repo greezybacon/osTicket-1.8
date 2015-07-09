@@ -102,7 +102,7 @@ if ($actions) {
                 <a class="no-pjax tasks-action"
                     <?php
                     if ($action['dialog'])
-                        echo sprintf("data-dialog='%s'", $action['dialog']);
+                        echo sprintf("data-dialog-config='%s'", $action['dialog']);
                     if ($action['redirect'])
                         echo sprintf("data-redirect='%s'", $action['redirect']);
                     ?>
@@ -120,8 +120,8 @@ if ($actions) {
  } ?>
 <script type="text/javascript">
 $(function() {
-    $(document).off('.tasks');
-    $(document).on('click.tasks', 'a.tasks-action', function(e) {
+    $(document).off('.tasks-actions');
+    $(document).on('click.tasks-actions', 'a.tasks-action', function(e) {
         e.preventDefault();
         var count = checkbox_checker($('form#tasks'), 1);
         if (count) {

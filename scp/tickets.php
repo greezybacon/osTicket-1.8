@@ -484,8 +484,10 @@ if (isset($_SESSION['advsearch'])) {
 }
 
 if ($thisstaff->hasPerm(TicketModel::PERM_CREATE, false)) {
+
     $nav->addSubMenu(array('desc'=>__('New Suggestion'),
                            'title'=> __('Open a New Suggestion'),
+
                            'href'=>'tickets.php?a=open',
                            'iconclass'=>'newTicket',
                            'id' => 'new-ticket'),
