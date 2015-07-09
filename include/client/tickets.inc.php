@@ -104,7 +104,9 @@ $tickets->values(
         <input type="search" class="form-control" name="keywords" size="30" value="<?php echo Format::htmlchars($settings['keywords']); ?>">
         <span class="input-group-btn">
         <select name="topic_id" class="nowarn btn" onchange="javascript: this.form.submit(); ">
+
             <option value="">&mdash; <?php echo __('All AI Teams');?> &mdash;</option>
+
 <?php       foreach (Topic::getHelpTopics(true) as $id=>$name) {
                 $count = $thisclient->getNumTopicTickets($id);
                 if ($count == 0)
@@ -133,7 +135,9 @@ $tickets->values(
         <h2>
             <a href="<?php echo Format::htmlchars($_SERVER['REQUEST_URI']); ?>"
                 ><i class="refresh icon-refresh"></i>
+
             <?php echo __('Suggestions'); ?>
+
             </a>
         </h2>
     </div>
@@ -145,6 +149,7 @@ $tickets->values(
                     <a class="state <?php if ($status == 'open') echo 'active'; ?>"
                         href="?<?php echo Http::build_query(array('a' => 'search', 'status' => 'open')); ?>">
                         <?php echo sprintf('%s (%d)', _P('suggestion-status', 'Open'), $thisclient->getNumOpenTickets()); ?>
+
                     </a>
                     &nbsp;
                     <span style="color:lightgray">|</span>

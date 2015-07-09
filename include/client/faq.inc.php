@@ -66,5 +66,3 @@ $category=$faq->getCategory();
         </div>
     </div>
 </div>
-
-<?php $faq->logView(); ?>
