@@ -2640,18 +2640,17 @@ form .inset {
 }
 label.checkbox {
     display: block;
-    padding-left: 1.3em;
-    text-indent: -1.3em;
+    padding-left: 1.2rem;
+    text-indent: -1.2rem;
 }
 input[type=checkbox] {
-  width: 1em;
-  height: 1em;
-  box-sizing: content-box;
+  width: 0.9rem;
+  height: 0.9rem;
   padding: 0;
   margin:0;
   vertical-align: bottom;
   position: relative;
-  top: -0.05em;
+  top: -1px;
   *overflow: hidden;
 }
 .vertical-pad {
@@ -2712,4 +2711,6 @@ table.grid.form caption {
   border-color: rgba(0,0,0,0.45);
   border-top-left-radius: 3px;
   border-bottom-left-radius: 3px;
+
 }
+

@@ -41,8 +41,12 @@ class VariableReplacer {
         }
     }
     function getVar($obj, $var) {
+
+
         if (!$obj)
             return "";
+
+
         // Order or resolving %{... .tag.remainder}
         // 1. $obj[$tag]
         // 2. $obj->tag
@@ -51,6 +55,7 @@ class VariableReplacer {
         @list($tag, $remainder) = explode('.', $var ?: '', 2);
         $tag = mb_strtolower($tag);
         $rv = null;
+
         if (!is_object($obj)) {
             if ($tag && is_array($obj) && array_key_exists($tag, $obj))
                 $rv = $obj[$tag];
@@ -75,9 +80,12 @@ class VariableReplacer {
                 $rv = call_user_func(array($obj, 'get'.ucfirst($tag)));
             }
         }
+
+
         // Recurse with $rv
         if (is_object($rv) || $remainder)
             return $this->getVar($rv, $remainder);
+
         return $rv;
     }
     function replaceVars($input) {
@@ -214,7 +222,7 @@ class VariableReplacer {
         if (!$roots)
             return false;
         $contextTypes = array(
-            'activity' => __('Type of recent activity'),
+            'activity' => array('class' => 'ThreadActivity', 'desc' => __('Type of recent activity')),
             'assignee' => array('class' => 'Staff', 'desc' => __('Assigned agent/team')),
             'assigner' => array('class' => 'Staff', 'desc' => __('Agent performing the assignment')),
             'comments' => __('Assign/transfer comments'),
@@ -228,6 +236,7 @@ class VariableReplacer {
             'signature' => 'Selected staff or department signature',
             'staff' => array('class' => 'Staff', 'desc' => 'Agent originating the activity'),
             'ticket' => array('class' => 'Ticket', 'desc' => 'The ticket'),
+            'task' => array('class' => 'Task', 'desc' => 'The task'),
             'user' => array('class' => 'User', 'desc' => __('Message recipient')),
         );
         $context = array();
