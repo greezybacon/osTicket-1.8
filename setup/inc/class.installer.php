@@ -53,8 +53,8 @@ class Installer extends SetupWizard {
         $f['lname']         = array('type'=>'string',   'required'=>1, 'error'=>__('Last name required'));
         $f['admin_email']   = array('type'=>'email',    'required'=>1, 'error'=>__('Valid email required'));
         $f['username']      = array('type'=>'username', 'required'=>1, 'error'=>__('Username required'));
-        $f['passwd']        = array('type'=>'password', 'required'=>1, 'error'=>__('Password required'));
-        $f['passwd2']       = array('type'=>'password', 'required'=>1, 'error'=>__('Confirm Password'));
+        $f['passwd']        = array('type'=>'string', 'required'=>1, 'error'=>__('Password required'));
+        $f['passwd2']       = array('type'=>'string', 'required'=>1, 'error'=>__('Confirm Password'));
         $f['prefix']        = array('type'=>'string',   'required'=>1, 'error'=>__('Table prefix required'));
         $f['dbhost']        = array('type'=>'string',   'required'=>1, 'error'=>__('Host name required'));
         $f['dbname']        = array('type'=>'string',   'required'=>1, 'error'=>__('Database name required'));
@@ -73,6 +73,14 @@ class Installer extends SetupWizard {
         //Admin's pass confirmation.
         if(!$this->errors && strcasecmp($vars['passwd'],$vars['passwd2']))
             $this->errors['passwd2']=__('Password(s) do not match');
+        try {
+            require_once INCLUDE_DIR.'class.auth.php';
+            PasswordPolicy::checkPassword($vars['passwd'], null);
+        }
+        catch (BadPassword $e) {
+            $this->errors['passwd'] = $e->getMessage();
+        }
+
         //Check table prefix underscore required at the end!
         if($vars['prefix'] && substr($vars['prefix'], -1)!='_')
             $this->errors['prefix']=__('Bad prefix. Must have underscore (_) at the end. e.g \'ost_\'');
