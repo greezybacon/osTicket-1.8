@@ -383,7 +383,7 @@ implements TemplateVariable {
 
         if (!$vars['topic'])
             $errors['topic']=__('Help topic name is required');
-        elseif (strlen($vars['topic'])<5)
+        elseif (strlen($vars['topic'])<2)
             $errors['topic']=__('Topic is too short. Five characters minimum');
         elseif (($tid=self::getIdByName($vars['topic'], $vars['topic_pid']))
                 && (!isset($this->topic_id) || $tid!=$this->getId()))
