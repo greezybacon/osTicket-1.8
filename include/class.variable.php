@@ -1,52 +1,36 @@
 <?php
 /*********************************************************************
     class.variable.php
-
     Variable replacer
-
     Used to parse, resolve and replace variables.
-
     Peter Rotich <peter@osticket.com>
     Copyright (c)  2006-2013 osTicket
     http://www.osticket.com
-
     Released under the GNU General Public License WITHOUT ANY WARRANTY.
     See LICENSE.TXT for details.
-
     vim: expandtab sw=4 ts=4 sts=4:
 **********************************************************************/
-
 class VariableReplacer {
-
     var $start_delim;
     var $end_delim;
-
     var $objects = array();
     var $variables = array();
     var $extras = array();
-
     var $errors;
-
     function VariableReplacer($start_delim='%{', $end_delim='}') {
-
         $this->start_delim = $start_delim;
         $this->end_delim = $end_delim;
     }
-
     function setError($error) {
         $this->errors[] = $error;
     }
-
     function getErrors() {
         return $this->errors;
     }
-
     function getObj($tag) {
         return @$this->objects[$tag];
     }
-
     function assign($var, $val='') {
-
         if($val && is_object($val)) {
             $this->objects[$var] = $val;
         } elseif($var && is_array($var)) {
@@ -56,12 +40,9 @@ class VariableReplacer {
             $this->variables[$var] = $val;
         }
     }
-
     function getVar($obj, $var) {
-
         if (!$obj)
             return "";
-
         // Order or resolving %{... .tag.remainder}
         // 1. $obj[$tag]
         // 2. $obj->tag
@@ -70,7 +51,6 @@ class VariableReplacer {
         @list($tag, $remainder) = explode('.', $var ?: '', 2);
         $tag = mb_strtolower($tag);
         $rv = null;
-
         if (!is_object($obj)) {
             if ($tag && is_array($obj) && array_key_exists($tag, $obj))
                 $rv = $obj[$tag];
@@ -95,39 +75,29 @@ class VariableReplacer {
                 $rv = call_user_func(array($obj, 'get'.ucfirst($tag)));
             }
         }
-
         // Recurse with $rv
         if (is_object($rv) || $remainder)
             return $this->getVar($rv, $remainder);
-
         return $rv;
     }
-
     function replaceVars($input) {
-
         // Preserve existing extras
         if ($input instanceof TextWithExtras)
             $this->extras = $input->extras;
-
         if($input && is_array($input))
             return array_map(array($this, 'replaceVars'), $input);
-
         if(!($vars=$this->_parse($input)))
             return $input;
-
         $text = str_replace(array_keys($vars), array_values($vars), $input);
         if ($this->extras) {
             return new TextWithExtras($text, $this->extras);
         }
         return $text;
     }
-
     function _resolveVar($var) {
-
         //Variable already memoized?
         if($var && @isset($this->variables[$var]))
             return $this->variables[$var];
-
         $parts = explode('.', $var, 2);
         try {
             if ($parts && ($obj=$this->getObj($parts[0])))
@@ -139,28 +109,22 @@ class VariableReplacer {
             $this->extras[$type] = array_merge($existing, $content->getContent());
             return $content->asVar();
         }
-
         if ($parts[0] && @isset($this->variables[$parts[0]])) { //root override
             if (is_array($this->variables[$parts[0]])
                     && isset($this->variables[$parts[0]][$parts[1]]))
                 return $this->variables[$parts[0]][$parts[1]];
-
             return $this->variables[$parts[0]];
         }
-
         //Unknown object or variable - leavig it alone.
         $this->setError(sprintf(__('Unknown object for "%s" tag'), $var));
         return false;
     }
-
     function _parse($text) {
-
         $input = $text;
         $result = array();
         if(!preg_match_all('/'.$this->start_delim.'([A-Za-z_][\w._]+)'.$this->end_delim.'/',
                 $input, $result))
             return null;
-
         $vars = array();
         foreach($result[0] as $k => $v) {
             if(isset($vars[$v])) continue;
@@ -168,10 +132,8 @@ class VariableReplacer {
             if($val!==false)
                 $vars[$v] = $val;
         }
-
         return $vars;
     }
-
     static function compileScope($scope, $recurse=5, $exclude=false) {
         $items = array();
         foreach ($scope as $name => $info) {
@@ -191,7 +153,6 @@ class VariableReplacer {
         }
         return $items;
     }
-
     static function compileFormScope($form) {
         $items = array();
         foreach ($form->getFields() as $f) {
@@ -199,7 +160,6 @@ class VariableReplacer {
                 continue;
             if (!$f->isStorable() || !$f->hasData())
                 continue;
-
             $desc = $f->getLocal('label');
             if (($class = $f->asVarType()) && class_exists($class)) {
                 $desc = array('desc' => $desc, 'class' => $class);
@@ -211,12 +171,10 @@ class VariableReplacer {
         }
         return $items;
     }
-
     static function compileFieldScope($field, $recurse=2, $exclude=false) {
         $items = array();
         if (!$field->hasSubFields())
             return $items;
-
         foreach ($field->getSubFields() as $f) {
             if (!($name = $f->get('name')))
                 continue;
@@ -235,32 +193,26 @@ class VariableReplacer {
         }
         return $items;
     }
-
     static function getContextForRoot($root) {
         switch ($root) {
         case 'cannedresponse':
             $roots = array('ticket');
             break;
-
         case 'fa:send_email':
             // FIXME: Make this pluggable
             require_once INCLUDE_DIR . 'class.filter_action.php';
             return FA_SendEmail::getVarScope();
-
         default:
             if ($info = Page::getContext($root)) {
                 $roots = $info;
                 break;
             }
-
             // Get the context for an email template
             if ($tpl_info = EmailTemplateGroup::getTemplateDescription($root))
                 $roots = $tpl_info['context'];
         }
-
         if (!$roots)
             return false;
-
         $contextTypes = array(
             'activity' => __('Type of recent activity'),
             'assignee' => array('class' => 'Staff', 'desc' => __('Assigned agent/team')),
@@ -290,15 +242,12 @@ class VariableReplacer {
         return self::compileScope($context + $global);
     }
 }
-
 class PlaceholderList
 /* implements TemplateVariable */ {
     var $items;
-
     function __construct($items) {
         $this->items = $items;
     }
-
     function asVar() {
         $items = array();
         foreach ($this->items as $I) {
@@ -311,7 +260,6 @@ class PlaceholderList
         }
         return implode(',', $items);
     }
-
     function getVar($tag) {
         $items = array();
         foreach ($this->items as $I) {
@@ -328,7 +276,6 @@ class PlaceholderList
         return new static(array_filter($items));
     }
 }
-
 /**
  * Exception used in the variable replacement process to indicate non text
  * content (such as attachments)
@@ -337,20 +284,16 @@ class OOBContent extends Exception {
     var $type;
     var $content;
     var $text;
-
     const FILES = 'files';
-
     function __construct($type, $content, $asVar='') {
         $this->type = $type;
         $this->content = $content;
         $this->text = $asVar;
     }
-
     function getType() { return $this->type; }
     function getContent() { return $this->content; }
     function asVar() { return $this->text; }
 }
-
 /**
  * Simple wrapper to represent a rendered or partially rendered template
  * with extra content such as attachments
@@ -358,12 +301,10 @@ class OOBContent extends Exception {
 class TextWithExtras {
     var $text = '';
     var $extras;
-
     function __construct($text, array $extras) {
         $this->setText($text);
         $this->extras = $extras;
     }
-
     function setText($text) {
         try {
             $this->text = (string) $text;
@@ -372,19 +313,16 @@ class TextWithExtras {
             throw new InvalidArgumentException('String type is required', 0, $e);
         }
     }
-
     function __toString() {
         return $this->text;
     }
-
     function getFiles() {
         return $this->extras[OOBContent::FILES];
     }
 }
-
 interface TemplateVariable {
-    // function asVar(); — not absolutely required
-    // function getVar($name, $parser); — not absolutely required
+    // function asVar(); — not absolutely required
+    // function getVar($name, $parser); — not absolutely required
     static function getVarScope();
 }
 ?>
