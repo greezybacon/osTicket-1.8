@@ -727,7 +727,7 @@ a time {
 .jb-overflowmenu {
     position: relative;
     height:35px;
-    width: 960px;
+    width: 100%;
 }
 
 
