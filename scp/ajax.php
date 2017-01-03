@@ -71,6 +71,7 @@ $dispatcher = patterns('',
         url_get('^(?P<list>\w+)/items/search$', 'searchListItems'),
         url_get('^(?P<list>\w+)/item/(?P<id>\d+)/update$', 'getListItem'),
         url_post('^(?P<list>\w+)/item/(?P<id>\d+)/update$', 'saveListItem'),
+        url_get('^(?P<list>\w+)/items/(?P<id>\d+)/preview$', 'previewListItem'),
         url('^(?P<list>\w+)/item/add$', 'addListItem'),
         url('^(?P<list>\w+)/import$', 'importListItems'),
         url('^(?P<list>\w+)/manage$', 'massManageListItems'),
@@ -265,7 +266,8 @@ $dispatcher = patterns('',
         url_get('^addColumn$', 'addColumn'),
         url_get('^condition/add$', 'addCondition'),
         url_get('^condition/addProperty$', 'addConditionProperty'),
-        url_get('^counts$', 'collectQueueCounts')
+        url_get('^counts$', 'collectQueueCounts'),
+        url('^(?P<id>\d+)/delete$', 'deleteQueue')
     ))
 );
 

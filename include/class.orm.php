@@ -422,9 +422,10 @@ class VerySimpleModel {
     }
 
     function __isset($field) {
-        return array_key_exists($field, $this->ht)
+        return ($this->ht && array_key_exists($field, $this->ht))
             || isset(static::$meta['joins'][$field]);
     }
+
     function __unset($field) {
         if ($this->__isset($field))
             unset($this->ht[$field]);
@@ -726,6 +727,21 @@ class VerySimpleModel {
     function getDbFields() {
         return $this->ht;
     }
+
+    /**
+     * Create a new clone of this model. The primary key will be unset and the
+     * object will be set as __new__. The __clone() magic method is reserved
+     * by the buildModel() system, because it clone's a single instance when
+     * hydrating objects from the database.
+     */
+    function copy() {
+        // Drop the PK and set as unsaved
+        $dup = clone $this;
+        foreach ($dup::getMeta('pk') as $f)
+            $dup->__unset($f);
+        $dup->__new__ = true;
+        return $dup;
+    }
 }
 
 /**
@@ -813,7 +829,7 @@ trait WriteableAnnotatedModelTrait {
     }
 
     function __isset($what) {
-        if ($this->__overlay__->__isset($what))
+        if (isset($this->__overlay__) && $this->__overlay__->__isset($what))
             return true;
         return parent::__isset($what);
     }
@@ -1502,6 +1518,16 @@ class QuerySet implements IteratorAggregate, ArrayAccess, Serializable, Countabl
         unset($this->query);
         unset($this->count);
         unset($this->total);
+    }
+
+    function __call($name, $args) {
+
+        if (!is_callable(array($this->getIterator(), $name)))
+            throw new OrmException('Call to undefined method QuerySet::'.$name);
+
+        return $args
+            ? call_user_func_array(array($this->getIterator(), $name), $args)
+            : call_user_func(array($this->getIterator(), $name));
     }
 
     // IteratorAggregate interface
@@ -3347,12 +3373,11 @@ class MySqlPreparedExecutor {
             case is_int($p):
             case is_float($p):
                 return $p;
-
             case $p instanceof DateTime:
                 $p = $p->format('Y-m-d H:i:s');
             default:
-                return db_real_escape($p, true);
-            }
+                return db_real_escape((string) $p, true);
+           }
         }, $this->sql);
     }
 }

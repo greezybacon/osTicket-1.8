@@ -481,7 +481,7 @@ class MysqlSearchBackend extends SearchBackend {
             LEFT JOIN `".TABLE_PREFIX."_search` A2 ON (A1.`id` = A2.`object_id` AND A2.`object_type`='H')
             WHERE A2.`object_id` IS NULL AND (A1.poster <> 'SYSTEM')
             AND (LENGTH(A1.`title`) + LENGTH(A1.`body`) > 0)
-            ORDER BY A1.`id` DESC";
+            ORDER BY A1.`id` DESC LIMIT 500";
         if (!($res = db_query_unbuffered($sql, $auto_create)))
             return false;
 
@@ -501,7 +501,7 @@ class MysqlSearchBackend extends SearchBackend {
         $sql = "SELECT A1.`ticket_id` FROM `".TICKET_TABLE."` A1
             LEFT JOIN `".TABLE_PREFIX."_search` A2 ON (A1.`ticket_id` = A2.`object_id` AND A2.`object_type`='T')
             WHERE A2.`object_id` IS NULL
-            ORDER BY A1.`ticket_id` DESC";
+            ORDER BY A1.`ticket_id` DESC LIMIT 300";
         if (!($res = db_query_unbuffered($sql, $auto_create)))
             return false;
 
@@ -832,7 +832,29 @@ class AssigneeChoiceField extends ChoiceField {
     }
 }
 
+/**
+ * Simple trait which changes the SQL for "has a value" and "does not have a
+ * value" to check for zero or non-zero. Useful for not nullable fields.
+ */
+trait ZeroMeansUnset {
+    function getSearchQ($method, $value, $name=false) {
+        $name = $name ?: $this->get('name');
+        switch ($method) {
+        // osTicket commonly uses `0` to represent an unset state, so
+        // the set and unset checks need to check for both not null and
+        // nonzero
+        case 'nset':
+            return new Q([$name => 0]);
+        case 'set':
+            return Q::not([$name => 0]);
+        }
+        return parent::getSearchQ($method, $value, $name);
+    }
+}
+
 class AgentSelectionField extends ChoiceField {
+    use ZeroMeansUnset;
+
     function getChoices($verbose=false) {
         return Staff::getStaffMembers();
     }
@@ -858,6 +880,8 @@ class AgentSelectionField extends ChoiceField {
 }
 
 class TeamSelectionField extends ChoiceField {
+    use ZeroMeansUnset;
+
     function getChoices($verbose=false) {
         return Team::getTeams();
     }
