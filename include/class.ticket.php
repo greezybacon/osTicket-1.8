@@ -1445,7 +1445,7 @@ implements RestrictedAccess, Threadable, Searchable {
         }
     }
 
-    function onMessage($message, $autorespond=true) {
+    function onMessage($message, $autorespond=true, $reopen=true) {
         global $cfg;
 
         $this->isanswered = 0;
@@ -1457,7 +1457,7 @@ implements RestrictedAccess, Threadable, Searchable {
         // We're also checking autorespond flag because we don't want to
         // reopen closed tickets on auto-reply from end user. This is not to
         // confused with autorespond on new message setting
-        if ($autorespond && $this->isClosed() && $this->isReopenable()) {
+        if ($reopen && $this->isClosed() && $this->isReopenable()) {
             $this->reopen();
             // Auto-assign to closing staff or the last respondent if the
             // agent is available and has access. Otherwise, put the ticket back
@@ -2316,10 +2316,13 @@ implements RestrictedAccess, Threadable, Searchable {
         $autorespond = isset($vars['mailflags'])
                 ? !$vars['mailflags']['bounce'] && !$vars['mailflags']['auto-reply']
                 : true;
+        $reopen = $autorespond; // Do not reopen bounces
         if ($autorespond && $message->isBounceOrAutoReply())
-            $autorespond = false;
+            $autorespond = $reopen= false;
+        elseif ($autorespond && isset($vars['autorespond']))
+            $autorespond = $vars['autorespond'];
 
-        $this->onMessage($message, ($autorespond && $alerts)); //must be called b4 sending alerts to staff.
+        $this->onMessage($message, ($autorespond && $alerts), $reopen); //must be called b4 sending alerts to staff.
 
         if ($autorespond && $alerts && $cfg && $cfg->notifyCollabsONNewMessage())
             $this->notifyCollaborators($message, array('signature' => ''));
@@ -2386,6 +2389,7 @@ implements RestrictedAccess, Threadable, Searchable {
                 $sentlist[] = $staff->getEmail();
             }
         }
+
         return $message;
     }
 
@@ -2807,6 +2811,7 @@ implements RestrictedAccess, Threadable, Searchable {
         if (!$this->save())
             return false;
 
+	$vars['note'] = ThreadEntryBody::clean($vars['note']);
         if ($vars['note'])
             $this->logNote(_S('Ticket Updated'), $vars['note'], $thisstaff);
 
@@ -2879,9 +2884,11 @@ implements RestrictedAccess, Threadable, Searchable {
     }
 
     static function isTicketNumberUnique($number) {
-        return 0 === static::objects()
+        $num = static::objects()
             ->filter(array('number' => $number))
-            ->count();
+	    ->count();
+
+	return ($num === 0);
     }
 
     /* Quick staff's tickets stats */
@@ -2976,8 +2983,8 @@ implements RestrictedAccess, Threadable, Searchable {
             $user_form = UserForm::getUserForm()->getForm($vars);
             // Add all the user-entered info for filtering
             foreach ($interesting as $F) {
-                $field = $user_form->getField($F);
-                $vars[$F] = $field->toString($field->getClean());
+                if ($field = $user_form->getField($F))
+                    $vars[$F] = $field->toString($field->getClean());
             }
             // Attempt to lookup the user and associated data
             $user = User::lookupByEmail($vars['email']);
@@ -3355,11 +3362,9 @@ implements RestrictedAccess, Threadable, Searchable {
         // Save the (common) dynamic form
         // Ensure we have a subject
         $subject = $form->getAnswer('subject');
-        if ($subject && !$subject->getValue()) {
-            if ($topic) {
-                $form->setAnswer('subject', $topic->getFullName());
-            }
-        }
+        if ($subject && !$subject->getValue() && $topic)
+            $subject->setValue($topic->getFullName());
+
         $form->setTicketId($ticket->getId());
         $form->save();
 

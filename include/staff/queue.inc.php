@@ -9,6 +9,8 @@ if (!$queue) {
     $queue = CustomQueue::create(array(
         'flags' => CustomQueue::FLAG_QUEUE,
     ));
+}
+if ($queue->__new__) {
     $title=__('Add New Queue');
     $action='create';
     $submit_text=__('Create');
@@ -43,6 +45,8 @@ else {
       <?php echo __('Columns'); ?></a></li>
     <li><a href="#sorting-tab"><i class="icon-sort-by-attributes"></i>
       <?php echo __('Sort'); ?></a></li>
+    <li><a href="#conditions-tab"><i class="icon-exclamation-sign"></i>
+      <?php echo __('Conditions'); ?></a></li>
     <li><a href="#preview-tab"><i class="icon-eye-open"></i>
       <?php echo __('Preview'); ?></a></li>
   </ul>
@@ -89,8 +93,11 @@ else {
           == <?php echo $queue->parent_id ?: 0; ?>);">
           <option value="0">— <?php echo __('Top-Level Queue'); ?> —</option>
 <?php foreach (CustomQueue::queues() as $cq) {
-        if ($cq->getId() == $queue->getId())
-          continue;
+        // Queue cannot be a descendent of itself
+        if ($cq->id == $queue->id)
+            continue;
+        if (strpos($cq->path, "/{$queue->id}/") !== false)
+            continue;
 ?>
           <option value="<?php echo $cq->id; ?>"
             <?php if ($cq->getId() == $queue->parent_id) echo 'selected="selected"'; ?>
@@ -306,7 +313,8 @@ var Q = setInterval(function() {
       $(function() {
         $('#preview-tab').on('afterShow', function() {
           $.ajax({
-            url: 'ajax.php/queue/preview',
+            url: 'ajax.php/queue<?php
+                if (isset($queue->id)) echo "/{$queue->id}"; ?>/preview',
             type: 'POST',
             data: $('#save').serializeArray(),
             success: function(html) {
@@ -316,6 +324,61 @@ var Q = setInterval(function() {
         });
       });
     </script>
+  </div>
+
+  <div class="hidden tab_content" id="conditions-tab">
+    <div style="margin-bottom: 15px"><?php echo __("Conditions are used to change the view of the data in a row based on some conditions of the data. For instance, a column might be shown bold if some condition is met.");
+      ?> <?php echo __("These conditions apply to an entire row in the queue."); 
+    ?></div>
+    <div class="conditions">
+<?php
+if ($queue->getConditions()) {
+  $fields = CustomQueue::getSearchableFields($queue->getRoot());
+  foreach ($queue->getConditions() as $i=>$condition) {
+     $id = QueueColumnCondition::getUid();
+     list($label, $field) = $condition->getField();
+     $field_name = $condition->getFieldName();
+     $object_id = $queue->id;
+     include STAFFINC_DIR . 'templates/queue-column-condition.tmpl.php';
+  }
+} ?>
+
+    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #bbb">
+      <i class="icon-plus-sign"></i>
+      <select class="add-condition">
+        <option value="0">— <?php echo __("Add a condition"); ?> —</option>
+<?php
+      foreach (CustomQueue::getSearchableFields('Ticket') as $path=>$f) {
+          list($label) = $f;
+          echo sprintf('<option value="%s">%s</option>', $path, Format::htmlchars($label));
+      }
+?>
+      </select>
+      <script>
+      $(function() {
+        var queueid = <?php echo $queue->id ?: 0; ?>,
+            nextid = <?php echo 1000 + QueueColumnCondition::getUid(); ?>;
+        $('#conditions-tab select.add-condition').change(function() {
+          var $this = $(this),
+              container = $this.closest('div'),
+              selected = $this.find(':selected');
+          if (selected.val() <= 0)
+            return;
+          $.ajax({
+            url: 'ajax.php/queue/condition/add',
+            data: { field: selected.val(), object_id: queueid, id: nextid },
+            dataType: 'html',
+            success: function(html) {
+              $(html).insertBefore(container);
+              $this.find('[value=0]').select();
+              nextid++;
+            }
+          });
+        });
+      });
+      </script>
+    </div>
+  </div>
 
   </div>
 

@@ -917,9 +917,9 @@ class FormField {
         return array(
             'set' => null,
             'nset' => null,
-            'equal' => array('TextboxField', array()),
-            'nequal' => array('TextboxField', array()),
-            'contains' => array('TextboxField', array()),
+            'equal' => array('TextboxField', array('configuration' => array('size' => 40))),
+            'nequal' => array('TextboxField', array('configuration' => array('size' => 40))),
+            'contains' => array('TextboxField', array('configuration' => array('size' => 40))),
             'match' => array('TextboxField', array(
                 'placeholder' => __('Valid regular expression'),
                 'configuration' => array('size'=>30),
@@ -1639,15 +1639,19 @@ class ChoiceField extends FormField {
             $value = JsonDataParser::parse($value) ?: $value;
 
         // CDATA table may be built with comma-separated key,value,key,value
-        if (is_string($value)) {
+        if (is_string($value) && strpos($value, ',')) {
             $values = array();
             $choices = $this->getChoices();
-            foreach (explode(',', $value) as $V) {
+            $vals = explode(',', $value);
+            foreach ($vals as $V) {
                 if (isset($choices[$V]))
                     $values[$V] = $choices[$V];
             }
             if (array_filter($values))
                 $value = $values;
+            elseif($vals)
+                list($value) = $vals;
+
         }
         $config = $this->getConfiguration();
         if (!$config['multiselect'] && is_array($value) && count($value) < 2) {
@@ -1833,7 +1837,7 @@ class DatetimeField extends FormField {
 
     function to_database($value) {
         // Store time in gmt time, unix epoch format
-        return date('Y-m-d H:i:s', $value);
+        return $value ? date('Y-m-d H:i:s', $value) : $value;
     }
 
     function to_php($value) {
@@ -1859,6 +1863,17 @@ class DatetimeField extends FormField {
 
         if (!$value)
             return '';
+        if (is_array($value) && isset($value['until'])) {
+            $n = $value['until'];
+            $intervals = array(
+                'i' => _N('minute', 'minutes', $n),
+                'h' => _N('hour', 'hours', $n),
+                'd' => _N('day', 'days', $n),
+                'w' => _N('week', 'weeks', $n),
+                'm' => _N('month', 'months', $n),
+            );
+            return sprintf('%d %s', $n, $intervals[$value['int'] ?: 'd']);
+        }
         if ($config['time'])
             return Format::datetime($value, $fromDb, !$config['gmt'] ? 'UTC' : false);
         else
@@ -1914,15 +1929,39 @@ class DatetimeField extends FormField {
             'between' =>    __('between'),
             'ndaysago' =>   __('in the last n days'),
             'ndays' =>      __('in the next n days'),
+            'future' =>     __('in the future'),
+            'past' =>       __('in the past'),
+            'distfut' =>    __('more than n days from now'),
+            'distpast' =>   __('more than n days ago'),
         );
     }
 
     function getSearchMethodWidgets() {
         $config_notime = $config = $this->getConfiguration();
         $config_notime['time'] = false;
+        $nday_form = function() {
+            $intervals = array(
+                'i' => _N('minute', 'minutes', 5),
+                'h' => _N('hour', 'hours', 5),
+                'd' => _N('day','days', 5),
+                'w' => _N('week', 'weeks', 5),
+                'm' => _N('month', 'months', 5),
+            );
+            return array(
+                'until' => new TextboxField(array(
+                    'configuration' => array('validator'=>'number', 'size'=>4))
+                ),
+                'int' => new ChoiceField(array(
+                    'default' => 'd',
+                    'choices' => $intervals,
+                )),
+            );
+        };
         return array(
             'set' => null,
             'nset' => null,
+            'past' => null,
+            'future' => null,
             'equal' => array('DatetimeField', array(
                 'configuration' => $config_notime,
             )),
@@ -1944,31 +1983,23 @@ class DatetimeField extends FormField {
                     'right' => new DatetimeField(),
                 ),
             )),
-            'ndaysago' => array('InlineformField', array(
-                'form' => array(
-                    'until' => new TextboxField(array(
-                        'configuration' => array('validator'=>'number', 'size'=>4))
-                    ),
-                    'text' => new FreeTextField(array(
-                        'configuration' => array('content' => 'days'))
-                    ),
-                ),
-            )),
-            'ndays' => array('InlineformField', array(
-                'form' => array(
-                    'until' => new TextboxField(array(
-                        'configuration' => array('validator'=>'number', 'size'=>4))
-                    ),
-                    'text' => new FreeTextField(array(
-                        'configuration' => array('content' => 'days'))
-                    ),
-                ),
-            )),
+            'ndaysago' => array('InlineformField', array('form'=>$nday_form())),
+            'ndays' => array('InlineformField', array('form'=>$nday_form())),
+            'distfut' => array('InlineformField', array('form'=>$nday_form())),
+            'distpast' => array('InlineformField', array('form'=>$nday_form())),
         );
     }
 
     function getSearchQ($method, $value, $name=false) {
+        static $intervals = array(
+            'm' => 'MONTH',
+            'w' => 'WEEK',
+            'd' => 'DAY',
+            'h' => 'HOUR',
+            'i' => 'MINUTE',
+        );
         $name = $name ?: $this->get('name');
+        $now = SqlFunction::NOW();
         $config = $this->getConfiguration();
         $value = is_int($value)
             ? DateTime::createFromFormat('U', !$config['gmt'] ? Misc::gmtime($value) : $value) ?: $value
@@ -1988,8 +2019,12 @@ class DatetimeField extends FormField {
                 "{$name}__lt" => $l,
                 "{$name}__gte" => $r,
             ));
+        case 'future':
+            $value = $now;
         case 'after':
             return new Q(array("{$name}__gte" => $value));
+        case 'past':
+            $value = $now;
         case 'before':
             return new Q(array("{$name}__lt" => $value));
         case 'between':
@@ -2004,16 +2039,29 @@ class DatetimeField extends FormField {
                 "{$name}__lte" => $value['right'],
             ));
         case 'ndaysago':
-            $now = Misc::gmtime();
+            $int = $intervals[$value['int'] ?: 'd'] ?: 'DAY';
+            $interval = new SqlInterval($int, $value['until']);
             return new Q(array(
-                "{$name}__lt" => $now,
-                "{$name}__gte" => SqlExpression::minus($now, SqlInterval::DAY($value['until'])),
+                "{$name}__range" => array($now->minus($interval), $now),
             ));
         case 'ndays':
-            $now = Misc::gmtime();
+            $int = $intervals[$value['int'] ?: 'd'] ?: 'DAY';
+            $interval = new SqlInterval($int, $value['until']);
             return new Q(array(
-                "{$name}__gt" => $now,
-                "{$name}__lte" => SqlExpression::plus($now, SqlInterval::DAY($value['until'])),
+                "{$name}__range" => array($now, $now->plus($interval)),
+            ));
+        // Distant past and future ranges
+        case 'distpast':
+            $int = $intervals[$value['int'] ?: 'd'] ?: 'DAY';
+            $interval = new SqlInterval($int, $value['until']);
+            return new Q(array(
+                "{$name}__lte" => $now->minus($interval),
+            ));
+        case 'distfut':
+            $int = $intervals[$value['int'] ?: 'd'] ?: 'DAY';
+            $interval = new SqlInterval($int, $value['until']);
+            return new Q(array(
+                "{$name}__gte" => $now->plus($interval),
             ));
         default:
             return parent::getSearchQ($method, $value, $name);
@@ -2030,8 +2078,16 @@ class DatetimeField extends FormField {
             return __('%1$s in the next %2$s' /* occurs within a window (like 3 days) */);
         case 'ndaysago':
             return __('%1$s in the last %2$s' /* occurs within a recent window (like 3 days) */);
+        case 'distfut':
+            return __('%1$s after %2$s from now' /* occurs after a window (like 3 days) */);
+        case 'distpast':
+            return __('%1$s before %2$s ago' /* occurs previous to a window (like 3 days) */);
         case 'between':
             return __('%1$s between %2$s and %3$s');
+        case 'future':
+            return __('%1$s is in the future');
+        case 'past':
+            return __('%1$s is in the past');
         default:
             return parent::describeSearchMethod($method);
         }
@@ -2045,6 +2101,66 @@ class DatetimeField extends FormField {
             return sprintf($desc, $name, $l, $r);
         }
         return parent::describeSearch($method, $value, $name);
+    }
+
+    function supportsQuickFilter() {
+        return true;
+    }
+
+    function getQuickFilterChoices() {
+        return array(
+            'h' => __('Today'),
+            'm' => __('Tomorrow'),
+            'g' => __('Yesterday'),
+            'l7' => __('Last 7 days'),
+            'l30' => __('Last 30 days'),
+            'n7' => __('Next 7 days'),
+            'n30' => __('Next 30 days'),
+            /* Ugh. These boundaries are so difficult in SQL
+            'w' =>  __('This Week'),
+            'm' =>  __('This Month'),
+            'lw' => __('Last Week'),
+            'lm' => __('Last Month'),
+            'nw' => __('Next Week'),
+            'nm' => __('Next Month'),
+            */
+        );
+    }
+
+    function applyQuickFilter($query, $qf_value, $name=false) {
+        $name = $name ?: $this->get('name');
+        $now = SqlFunction::NOW();
+        $midnight = Misc::dbtime(time() - (time() % 86400));
+        switch ($qf_value) {
+        case 'l7':
+            return $query->filter([
+                "{$name}__range" => array($now->minus(SqlInterval::DAY(7)), $now),
+            ]);
+        case 'l30':
+            return $query->filter([
+                "{$name}__range" => array($now->minus(SqlInterval::DAY(30)), $now),
+            ]);
+        case 'n7':
+            return $query->filter([
+                "{$name}__range" => array($now, $now->minus(SqlInterval::DAY(7))),
+            ]);
+        case 'n30':
+            return $query->filter([
+                "{$name}__range" => array($now, $now->minus(SqlInterval::DAY(30))),
+            ]);
+        case 'g':
+            $midnight -= 86400;
+             // Fall through to the today case
+        case 'm':
+            if ($qf_value === 'm') $midnight += 86400;
+             // Fall through to the today case
+        case 'h':
+            $midnight = DateTime::createFromFormat('U', $midnight);
+            return $query->filter([
+                "{$name}__range" => array($midnight,
+                    SqlExpression::plus($midnight, SqlInterval::DAY(1))),
+            ]);
+        }
     }
 }
 
@@ -2366,7 +2482,7 @@ class AssigneeField extends ChoiceField {
             $criteria = $this->getCriteria();
             $agents = array();
             if (($dept=$config['dept']) && $dept->assignMembersOnly()) {
-                if (($members = $dept->getMembers($criteria)))
+                if (($members = $dept->getAvailableMembers()))
                     foreach ($members as $member)
                         $agents[$member->getId()] = $member;
             } else {
