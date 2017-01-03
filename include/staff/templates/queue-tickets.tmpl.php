@@ -175,30 +175,12 @@ else {
                         </li>
 <?php
 }
-if ($thisstaff->isAdmin()) { ?>
-                        <li>
-                            <a class="no-pjax"
-                            href="queues.php?a=sub&amp;id=<?php echo $queue->id; ?>"><i
-                            class="icon-fixed-width icon-level-down"></i>
-                            <?php echo __('Add Sub Queue'); ?></a>
-                        </li>
-                        <li>
-                            <a class="no-pjax"
-                            href="queues.php?a=clone&amp;id=<?php echo $queue->id; ?>"><i
-                            class="icon-fixed-width icon-copy"></i>
-                            <?php echo __('Clone'); ?></a>
-                        </li>
-<?php }
 if (
-    $queue->id > 0
-    && (
-        ($thisstaff->isAdmin() && $queue->parent_id)
-        || $queue->isPrivate()
-)) { ?>
+    ($thisstaff->isAdmin() && $queue->parent_id)
+    || $queue->isPrivate()
+) { ?>
                         <li class="danger">
-                            <a class="no-pjax confirm-action" href="#"
-                                data-dialog="ajax.php/queue/<?php
-                                echo $queue->id; ?>/delete"><i
+                            <a class="no-pjax" href="#"><i
                             class="icon-fixed-width icon-trash"></i>
                             <?php echo __('Delete'); ?></a>
                         </li>

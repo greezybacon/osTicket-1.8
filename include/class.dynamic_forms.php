@@ -959,11 +959,15 @@ class DynamicFormEntry extends VerySimpleModel {
     }
 
     function setAnswer($name, $value, $id=false) {
-
-        if ($ans=$this->getAnswer($name)) {
+        foreach ($this->getAnswers() as $ans) {
             $f = $ans->getField();
-            if ($f->isStorable())
-                $ans->setValue($value, $id);
+            if ($f->isStorable() && $f->get('name') == $name) {
+                $f->reset();
+                $ans->set('value', $value);
+                if ($id !== false)
+                    $ans->set('value_id', $id);
+                break;
+            }
         }
     }
 
@@ -1274,7 +1278,7 @@ class DynamicFormEntry extends VerySimpleModel {
             }
             if ($a->dirty)
                 $dirty++;
-            $a->save($refetch);
+            $a->save();
         }
         return $dirty;
     }
@@ -1352,24 +1356,14 @@ class DynamicFormEntryAnswer extends VerySimpleModel {
     }
 
     function getValue() {
-
-        if (!isset($this->_value)) {
+        if (!isset($this->_value) && isset($this->value)) {
             //XXX: We're settting the value here to avoid infinite loop
             $this->_value = false;
-            if (isset($this->value))
-                $this->_value = $this->getField()->to_php(
-                        $this->get('value'), $this->get('value_id'));
+            $this->_value = $this->getField()->to_php(
+                $this->get('value'), $this->get('value_id'));
         }
 
         return $this->_value;
-    }
-
-    function setValue($value, $id=false) {
-        $this->getField()->reset();
-        $this->_value = null;
-        $this->set('value', $value);
-        if ($id !== false)
-            $this->set('value_id', $id);
     }
 
     function getLocal($tag) {
@@ -1459,28 +1453,6 @@ class SelectionField extends FormField {
             $widgetClass = 'TextboxSelectionWidget';
 
         return parent::getWidget($widgetClass);
-    }
-
-    function display($value) {
-        global $thisstaff;
-
-        if (!is_array($value)
-                || !$thisstaff // Only agents can preview for now
-                || !($list=$this->getList()))
-            return parent::display($value);
-
-        $display = array();
-        foreach ($value as $k => $v) {
-            if (is_numeric($k)
-                    && ($i=$list->getItem((int) $k))
-                    && $i->hasProperties())
-                $display[] = $i->display();
-            else // Perhaps deleted  entry
-                $display[] = $v;
-        }
-
-        return implode(',', $display);
-
     }
 
     function parse($value) {
@@ -1634,10 +1606,8 @@ class SelectionField extends FormField {
                 }
             } elseif ($config['typeahead']
                     && ($entered = $this->getWidget()->getEnteredValue())
-                    && !in_array($entered, $entry)
-                    && $entered != $entry) {
+                    && !in_array($entered, $entry))
                 $this->_errors[] = __('Select a value from the list');
-           }
         }
     }
 

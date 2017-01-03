@@ -198,13 +198,15 @@ implements Searchable {
             ));
         }
 
-        $this->collaborators->filter(array(
-            'thread_id' => $this->getId(),
-            Q::not(array('id__in' => $cids ?: array(0)))
-        ))->update(array(
-            'updated' => SqlFunction::NOW(),
-            'isactive' => 0,
-        ));
+        if ($cids) {
+            $this->collaborators->filter(array(
+                'thread_id' => $this->getId(),
+                Q::not(array('id__in' => $cids))
+            ))->update(array(
+                'updated' => SqlFunction::NOW(),
+                'isactive' => 0,
+            ));
+        }
 
         unset($this->ht['active_collaborators']);
         $this->_collaborators = null;
@@ -313,7 +315,6 @@ implements Searchable {
             'reply_to' => $entry,
             'recipients' => $mailinfo['recipients'],
             'to-email-id' => $mailinfo['to-email-id'],
-            'autorespond' => !isset($mailinfo['passive']),
         );
 
         // XXX: Is this necessary?
@@ -930,18 +931,9 @@ implements TemplateVariable {
                         _S($error_descriptions[$error]));
                 }
                 // No need to log the missing-file error number
-                if ($error != UPLOAD_ERR_NO_FILE
-                    && ($thread = $this->getThread())
-                ) {
-                    // Log to the thread directly, since alerts should be
-                    // suppressed and this is defintely a system message
-                    $thread->addNote(array(
-                        'title' => _S('File Import Error'),
-                        'note' => new TextThreadEntryBody($error),
-                        'poster' => 'SYSTEM',
-                        'staffId' => 0,
-                    ));
-                }
+                if ($error != UPLOAD_ERR_NO_FILE)
+                    $this->getThread()->getObject()->logNote(
+                        _S('File Import Error'), $error, _S('SYSTEM'), false);
                 continue;
             }
 
@@ -1138,13 +1130,11 @@ implements TemplateVariable {
     function lookupByEmailHeaders(&$mailinfo, &$seen=false) {
         // Search for messages using the References header, then the
         // in-reply-to header
-        if ($mailinfo['mid'] &&
-                ($entry = ThreadEntry::objects()
-                 ->filter(array('email_info__mid' => $mailinfo['mid']))
-                 ->order_by(false)
-                 ->first()
-                 )
-         ) {
+        if ($entry = ThreadEntry::objects()
+            ->filter(array('email_info__mid' => $mailinfo['mid']))
+            ->order_by(false)
+            ->first()
+        ) {
             $seen = true;
             return $entry;
         }
@@ -1206,19 +1196,40 @@ implements TemplateVariable {
                 // ThreadEntry was positively identified
                 return $t;
             }
+
+            // Try to determine if it's a reply to a tagged email.
+            // (Deprecated)
+            $ref = null;
+            if (strpos($mid, '+')) {
+                list($left, $right) = explode('@',$mid);
+                list($left, $ref) = explode('+', $left);
+                $mid = "$left@$right";
+            }
+            $entries = ThreadEntry::objects()
+                ->filter(array('email_info__mid' => $mid))
+                ->order_by(false);
+            foreach ($entries as $t) {
+                // Capture the first match thread item
+                if (!$thread)
+                    $thread = $t;
+                // We found a match  - see if we can ID the user.
+                // XXX: Check access of ref is enough?
+                if ($ref && ($uid = $t->getUIDFromEmailReference($ref))) {
+                    if ($ref[0] =='s') //staff
+                        $mailinfo['staffId'] = $uid;
+                    else // user or collaborator.
+                        $mailinfo['userId'] = $uid;
+
+                    // Best possible case — found the thread and the
+                    // user
+                    return $t;
+                }
+            }
         }
-        // Passive threading - listen mode
-        if (count($possibles)
-                && ($entry = ThreadEntry::objects()
-                    ->filter(array('email_info__mid__in' => array_map(
-                        function ($a) { return "<$a>"; },
-                    $possibles)))
-                    ->first()
-                )
-         ) {
-            $mailinfo['passive'] = true;
-            return $entry;
-        }
+        // Second best case — found a thread but couldn't identify the
+        // user from the header. Return the first thread entry matched
+        if ($thread)
+            return $thread;
 
         // Search for ticket by the [#123456] in the subject line
         // This is the last resort -  emails must match to avoid message
@@ -2485,7 +2496,7 @@ implements TemplateVariable {
         ));
     }
 
-    function addNote($vars, &$errors=array()) {
+    function addNote($vars, &$errors) {
 
         //Add ticket Id.
         $vars['threadId'] = $this->getId();

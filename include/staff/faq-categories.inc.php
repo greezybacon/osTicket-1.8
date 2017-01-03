@@ -140,7 +140,8 @@ if($_REQUEST['q'] || $_REQUEST['cid'] || $_REQUEST['topicId']) { //Search.
     }
 } else { //Category Listing.
     $categories = Category::objects()
-        ->annotate(array('faq_count'=>SqlAggregate::COUNT('faqs')));
+        ->annotate(array('faq_count'=>SqlAggregate::COUNT('faqs')))
+        ->all();
 
     if (count($categories)) {
         $categories->sort(function($a) { return $a->getLocalName(); });

@@ -771,6 +771,7 @@ a time {
     top: 0;
     border-bottom: 1px solid #bebebe;
     border-left:1px solid #bebebe;
+    border-right: 1px solid #aaa;
     background-color: #eee;
 }
 
@@ -786,7 +787,6 @@ a time {
     color:#666;
     padding:9px;
     background-color:#eee;
-    border-right: 1px solid #aaa;
 }
 .jb-overflowmenu .jb-overflowmenu-container > a.jb-overflowmenu-menu-secondary-handle:hover {
     color:#000;
@@ -2956,9 +2956,7 @@ tr.disabled th {
 }
 
 .label {
-    display: inline-block;
-    position: relative;
-    bottom: 1px;
+    float: right;
     margin-bottom: 4px;
     font-size: 11px;
     padding: 0px 7px;

@@ -1639,19 +1639,15 @@ class ChoiceField extends FormField {
             $value = JsonDataParser::parse($value) ?: $value;
 
         // CDATA table may be built with comma-separated key,value,key,value
-        if (is_string($value) && strpos($value, ',')) {
+        if (is_string($value)) {
             $values = array();
             $choices = $this->getChoices();
-            $vals = explode(',', $value);
-            foreach ($vals as $V) {
+            foreach (explode(',', $value) as $V) {
                 if (isset($choices[$V]))
                     $values[$V] = $choices[$V];
             }
             if (array_filter($values))
                 $value = $values;
-            elseif($vals)
-                list($value) = $vals;
-
         }
         $config = $this->getConfiguration();
         if (!$config['multiselect'] && is_array($value) && count($value) < 2) {
@@ -1837,7 +1833,7 @@ class DatetimeField extends FormField {
 
     function to_database($value) {
         // Store time in gmt time, unix epoch format
-        return $value ? date('Y-m-d H:i:s', $value) : $value;
+        return date('Y-m-d H:i:s', $value);
     }
 
     function to_php($value) {
@@ -2042,13 +2038,15 @@ class DatetimeField extends FormField {
             $int = $intervals[$value['int'] ?: 'd'] ?: 'DAY';
             $interval = new SqlInterval($int, $value['until']);
             return new Q(array(
-                "{$name}__range" => array($now->minus($interval), $now),
+                "{$name}__lt" => $now,
+                "{$name}__gte" => $now->minus($interval),
             ));
         case 'ndays':
             $int = $intervals[$value['int'] ?: 'd'] ?: 'DAY';
             $interval = new SqlInterval($int, $value['until']);
             return new Q(array(
-                "{$name}__range" => array($now, $now->plus($interval)),
+                "{$name}__gt" => $now,
+                "{$name}__gte" => $now->plus($interval),
             ));
         // Distant past and future ranges
         case 'distpast':
@@ -2101,66 +2099,6 @@ class DatetimeField extends FormField {
             return sprintf($desc, $name, $l, $r);
         }
         return parent::describeSearch($method, $value, $name);
-    }
-
-    function supportsQuickFilter() {
-        return true;
-    }
-
-    function getQuickFilterChoices() {
-        return array(
-            'h' => __('Today'),
-            'm' => __('Tomorrow'),
-            'g' => __('Yesterday'),
-            'l7' => __('Last 7 days'),
-            'l30' => __('Last 30 days'),
-            'n7' => __('Next 7 days'),
-            'n30' => __('Next 30 days'),
-            /* Ugh. These boundaries are so difficult in SQL
-            'w' =>  __('This Week'),
-            'm' =>  __('This Month'),
-            'lw' => __('Last Week'),
-            'lm' => __('Last Month'),
-            'nw' => __('Next Week'),
-            'nm' => __('Next Month'),
-            */
-        );
-    }
-
-    function applyQuickFilter($query, $qf_value, $name=false) {
-        $name = $name ?: $this->get('name');
-        $now = SqlFunction::NOW();
-        $midnight = Misc::dbtime(time() - (time() % 86400));
-        switch ($qf_value) {
-        case 'l7':
-            return $query->filter([
-                "{$name}__range" => array($now->minus(SqlInterval::DAY(7)), $now),
-            ]);
-        case 'l30':
-            return $query->filter([
-                "{$name}__range" => array($now->minus(SqlInterval::DAY(30)), $now),
-            ]);
-        case 'n7':
-            return $query->filter([
-                "{$name}__range" => array($now, $now->minus(SqlInterval::DAY(7))),
-            ]);
-        case 'n30':
-            return $query->filter([
-                "{$name}__range" => array($now, $now->minus(SqlInterval::DAY(30))),
-            ]);
-        case 'g':
-            $midnight -= 86400;
-             // Fall through to the today case
-        case 'm':
-            if ($qf_value === 'm') $midnight += 86400;
-             // Fall through to the today case
-        case 'h':
-            $midnight = DateTime::createFromFormat('U', $midnight);
-            return $query->filter([
-                "{$name}__range" => array($midnight,
-                    SqlExpression::plus($midnight, SqlInterval::DAY(1))),
-            ]);
-        }
     }
 }
 
@@ -2482,7 +2420,7 @@ class AssigneeField extends ChoiceField {
             $criteria = $this->getCriteria();
             $agents = array();
             if (($dept=$config['dept']) && $dept->assignMembersOnly()) {
-                if (($members = $dept->getAvailableMembers()))
+                if (($members = $dept->getMembers($criteria)))
                     foreach ($members as $member)
                         $agents[$member->getId()] = $member;
             } else {

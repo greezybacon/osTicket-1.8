@@ -99,7 +99,7 @@ class Unpacker extends Module {
         if (!is_file($path))
             return null;
 
-        if (!preg_match_all('/^([\w:,]+) (.+)$/mu', file_get_contents($path),
+        if (!preg_match_all('/^(\w+) (.+)$/mu', file_get_contents($path),
             $lines, PREG_PATTERN_ORDER)
         ) {
             return null;
@@ -156,7 +156,6 @@ class Unpacker extends Module {
     function unpackage($folder, $destination, $recurse=0, $exclude=false) {
         $dryrun = $this->getOption('dry-run', false);
         $verbose = $this->getOption('verbose') || $dryrun;
-        $force = $this->getOption('force', false);
         if (substr($destination, -1) !== '/')
             $destination .= '/';
         foreach (glob($folder, GLOB_BRACE|GLOB_NOSORT) as $file) {
@@ -165,15 +164,10 @@ class Unpacker extends Module {
             if (is_file($file)) {
                 $target = $destination . basename($file);
                 $hash = $this->hashFile($file);
-                if (!$force && is_file($target)
-                        && false === ($flag = $this->isChanged($file, $hash)))
+                if (is_file($target) && !$this->isChanged($file, $hash))
                     continue;
-                if ($verbose) {
-                    $msg = $target;
-                    if (is_string($flag))
-                        $msg = "$msg ({$flag})";
-                    $this->stdout->write("$msg\n");
-                }
+                if ($verbose)
+                    $this->stdout->write($target."\n");
                 if ($dryrun)
                     continue;
                 if (!is_dir($destination))

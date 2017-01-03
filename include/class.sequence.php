@@ -205,7 +205,7 @@ class Sequence extends VerySimpleModel {
     }
 
     function __create($data) {
-        $instance = new self($data);
+        $instance = new static($data);
         $instance->save();
         return $instance;
     }

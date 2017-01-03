@@ -503,7 +503,7 @@ class TicketsAjaxAPI extends AjaxController {
             if ($ticket->getStaffId() == $thisstaff->getId())
                 $assigned = __('you');
             else
-                $assigned = $ticket->getAssigned();
+                $assigneed = $ticket->getAssigned();
 
             $info['error'] = sprintf(__('%s is currently assigned to <b>%s</b>'),
                     __('This ticket'),
