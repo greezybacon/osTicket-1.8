@@ -3081,6 +3081,8 @@ class MySqlCompiler extends SqlCompiler {
                     $group_by[] = $rootAlias .'.'. $pk;
             }
         }
+        if (!$need_group_by)
+            $group_by = [];
         // Add in SELECT extras
         if (isset($queryset->extra['select'])) {
             foreach ($queryset->extra['select'] as $name=>$expr) {
